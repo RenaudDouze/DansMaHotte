@@ -15,15 +15,19 @@ describe("parseFreeText", () => {
     expect(parseFreeText("  pommes   vertes  ")).toEqual({ name: "pommes vertes", quantity: "" });
   });
 
-  describe("nombre nu (un seul token)", () => {
+  describe("nombre nu (un seul token) : jamais extrait à lui seul", () => {
+    // Contrairement à une liste de courses, un nombre isolé dans un nom de
+    // cadeau fait presque toujours partie du nom (référence produit, tome
+    // d'une collection...) plutôt que d'indiquer une quantité — voir
+    // matchSingleToken ci-dessus.
     it("en tête", () => {
-      expect(parseFreeText("2 pommes")).toEqual({ name: "pommes", quantity: "2" });
+      expect(parseFreeText("2 pommes")).toEqual({ name: "2 pommes", quantity: "" });
     });
     it("en fin", () => {
-      expect(parseFreeText("pommes 2")).toEqual({ name: "pommes", quantity: "2" });
+      expect(parseFreeText("pommes 2")).toEqual({ name: "pommes 2", quantity: "" });
     });
     it("avec virgule décimale", () => {
-      expect(parseFreeText("1,5 lait")).toEqual({ name: "lait", quantity: "1.5" });
+      expect(parseFreeText("1,5 lait")).toEqual({ name: "1,5 lait", quantity: "" });
     });
   });
 
