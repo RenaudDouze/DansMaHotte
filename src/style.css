@@ -579,6 +579,16 @@ button:focus-visible {
   white-space: nowrap;
 }
 
+/* Sans cette largeur fixe, l'input générique (.inline-edit, width: 100%)
+   revendique sa largeur intrinsèque par défaut (~20 caractères) dans le
+   calcul flexbox — puisque .item-price a flex-shrink: 0, ce badge s'élargit
+   alors bien au-delà d'un prix, écrasant .item-name (qui peut rétrécir
+   jusqu'à 0) au point de faire passer son texte à la ligne caractère par
+   caractère. */
+.item-price .inline-edit {
+  width: 4.5em;
+}
+
 .item-price.item-price-empty {
   background: var(--checked-bg);
   color: var(--text-muted);

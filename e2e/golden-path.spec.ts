@@ -14,7 +14,7 @@ test("parcours complet : créer, ajouter, mettre un prix, assigner une personne,
   await page.click(".add-submit");
   await expect(page.locator(".item .item-name")).toHaveText("Lego");
 
-  // Un cadeau sans prix renseigné affiche le badge "+" (à éditer au besoin) ;
+  // Un cadeau sans prix renseigné affiche le badge "€" (à éditer au besoin) ;
   // le renseigner met à jour le badge et le total de la liste, jusque-là masqué.
   await expect(page.locator(".totals-bar")).toBeHidden();
   await page.locator(".item-price").click();

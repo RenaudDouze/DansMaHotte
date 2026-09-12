@@ -499,7 +499,7 @@ test("on peut ajouter, modifier et effacer le prix d'un cadeau, avec les totaux 
   const lego = page.locator(".item", { has: page.locator(".item-name", { hasText: "Lego" }) });
   const livre = page.locator(".item", { has: page.locator(".item-name", { hasText: "Livre" }) });
   await expect(lego.locator(".item-price")).toHaveClass(/item-price-empty/);
-  await expect(lego.locator(".item-price")).toHaveText("+");
+  await expect(lego.locator(".item-price")).toHaveText("€");
   await expect(page.locator(".totals-bar")).toBeHidden();
 
   // Saisie avec une virgule décimale (usage français courant), arrondie au
@@ -537,7 +537,7 @@ test("on peut ajouter, modifier et effacer le prix d'un cadeau, avec les totaux 
     .click();
   await page.fill(".item-price .inline-edit", "");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".item", { has: page.locator(".item-name", { hasText: "Lego" }) }).locator(".item-price")).toHaveText("+");
+  await expect(page.locator(".item", { has: page.locator(".item-name", { hasText: "Lego" }) }).locator(".item-price")).toHaveText("€");
   await expect(page.locator(".totals-bar")).toHaveText("Total : 10,00 €");
 });
 
