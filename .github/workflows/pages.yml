@@ -55,7 +55,7 @@ jobs:
         # qui route elle-même via location.pathname une fois chargée.
         run: cp dist/client/index.html dist/client/404.html
       - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist/client
       - id: deployment
