@@ -119,6 +119,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   // erreur de zone morte temporelle : ce même rendu appelle closeStatusPicker
   // dès renderRecipients.
   let activeStatusPicker: { anchor: HTMLElement; panel: HTMLElement; cleanup: () => void } | null = null;
+  // Même popover flottant que activeStatusPicker ci-dessus, pour éditer le
+  // lien d'un cadeau — même raison de déclaration avant le premier rendu.
+  let activeLinkEditor: { anchor: HTMLElement; panel: HTMLElement; cleanup: () => void } | null = null;
   let shellMounted = false;
   let searchQuery = "";
   // null = pas encore évalué (évite de célébrer à l'ouverture d'une liste
@@ -688,6 +691,74 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     };
   }
 
+  function closeLinkEditor(): void {
+    if (!activeLinkEditor) return;
+    activeLinkEditor.anchor.setAttribute("aria-expanded", "false");
+    activeLinkEditor.panel.remove();
+    activeLinkEditor.cleanup();
+    activeLinkEditor = null;
+  }
+
+  /** Petit popover flottant pour ajouter/modifier/retirer le lien d'un
+   * cadeau — même principe de positionnement que openStatusPicker. Le lien
+   * affiché est toujours celui reçu du serveur (déjà normalisé par
+   * worker/reducer.ts), jamais une valeur locale non confirmée. */
+  function openLinkEditor(anchor: HTMLButtonElement, item: Item): void {
+    closeLinkEditor();
+    const panel = document.createElement("div");
+    panel.className = "link-editor";
+    panel.setAttribute("role", "dialog");
+    panel.innerHTML = `
+      ${item.link ? `<a class="link-editor-open" href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer">${icons.link} ${escapeHtml(item.link)}</a>` : ""}
+      <form class="link-editor-form" novalidate>
+        <input type="text" inputmode="url" class="link-editor-input" placeholder="https://..." value="${escapeHtml(item.link ?? "")}" />
+        <button type="submit" class="btn primary">Enregistrer</button>
+      </form>
+      ${item.link ? `<button type="button" class="link-editor-remove">Supprimer le lien</button>` : ""}
+    `;
+    document.body.appendChild(panel);
+
+    const rect = anchor.getBoundingClientRect();
+    panel.style.top = `${rect.bottom + 4}px`;
+    panel.style.left = `${rect.left}px`;
+    const overflowX = panel.getBoundingClientRect().right - window.innerWidth + 8;
+    if (overflowX > 0) panel.style.left = `${Math.max(8, rect.left - overflowX)}px`;
+    anchor.setAttribute("aria-expanded", "true");
+
+    const input = panel.querySelector<HTMLInputElement>(".link-editor-input")!;
+    input.focus();
+
+    panel.querySelector(".link-editor-form")!.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const link = input.value.trim();
+      conn.send({ type: "updateItem", id: item.id, link });
+      closeLinkEditor();
+    });
+    panel.querySelector(".link-editor-remove")?.addEventListener("click", () => {
+      conn.send({ type: "updateItem", id: item.id, link: "" });
+      closeLinkEditor();
+    });
+
+    function onDocClick(e: MouseEvent): void {
+      if (!panel.contains(e.target as Node)) closeLinkEditor();
+    }
+    function onKeydown(e: KeyboardEvent): void {
+      if (e.key === "Escape") closeLinkEditor();
+    }
+    setTimeout(() => {
+      document.addEventListener("click", onDocClick);
+      document.addEventListener("keydown", onKeydown);
+    });
+    activeLinkEditor = {
+      anchor,
+      panel,
+      cleanup: () => {
+        document.removeEventListener("click", onDocClick);
+        document.removeEventListener("keydown", onKeydown);
+      },
+    };
+  }
+
   function renderRecipients(): void {
     const container = root.querySelector("#recipients") as HTMLElement | null;
     if (!container || !state) return;
@@ -695,6 +766,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     // reconstruire ce DOM, mieux vaut le refermer plutôt que de le laisser
     // pointer vers un nœud qui va disparaître.
     closeStatusPicker();
+    closeLinkEditor();
 
     const query = searchQuery.trim().toLowerCase();
     const alphabeticalItems = getItemSortPreference() === "alphabetical";
@@ -801,6 +873,19 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       });
     });
 
+    container.querySelectorAll<HTMLButtonElement>(".item-link").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const item = state!.items.find((i) => i.id === btn.dataset.id);
+        if (!item) return;
+        if (activeLinkEditor?.anchor === btn) {
+          closeLinkEditor();
+          return;
+        }
+        openLinkEditor(btn, item);
+      });
+    });
+
     container.querySelectorAll<HTMLElement>('[data-action="delete-item"]').forEach((btn) => {
       const item = state!.items.find((i) => i.id === btn.dataset.id);
       if (!item) return;
@@ -893,7 +978,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     disposeSwipe = enableSwipeToDelete(container, {
       itemSelector: ".item",
       contentSelector: ".item-content",
-      ignoreSelector: ".item-drag-handle, .item-check, .item-status, .item-delete, .item-photo",
+      ignoreSelector: ".item-drag-handle, .item-check, .item-status, .item-delete, .item-photo, .item-link",
       onDelete: (el) => {
         const item = state!.items.find((i) => i.id === el.dataset.id);
         if (!item) return;
@@ -982,6 +1067,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <span class="item-name" data-id="${item.id}">${escapeHtml(item.name)}</span>
           <button type="button" class="item-photo${item.hasImage ? "" : " item-photo-empty"}" data-action="item-photo" data-id="${item.id}" aria-label="${item.hasImage ? `Voir la photo de « ${escapeHtml(item.name)} »` : `Ajouter une photo à « ${escapeHtml(item.name)} »`}">${photoContent}</button>
           <input type="file" class="item-image-input" data-id="${item.id}" accept="${ALLOWED_IMAGE_TYPES.join(",")}" hidden />
+          <button type="button" class="item-link${item.link ? " item-link-set" : " item-link-empty"}" data-id="${item.id}" aria-haspopup="true" aria-expanded="false" aria-label="${item.link ? `Voir/modifier le lien de « ${escapeHtml(item.name)} »` : `Ajouter un lien à « ${escapeHtml(item.name)} »`}">${icons.link}</button>
           <button class="icon-btn item-delete" data-action="delete-item" data-id="${item.id}" aria-label="Supprimer">${icons.trash}</button>
         </div>
       </li>
@@ -1102,6 +1188,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     disposeSwipe?.();
     clearUndoStack();
     closeStatusPicker();
+    closeLinkEditor();
     document.querySelectorAll(".modal-overlay").forEach((el) => el.remove());
   };
 }

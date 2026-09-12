@@ -44,6 +44,12 @@ export interface Item {
   /** Optional for backward compatibility with items created before this
    * field existed — always read via `item.status ?? "idee"`. */
   status?: GiftStatus;
+  /** Lien vers une page web (ex: la fiche produit repérée en ligne).
+   * Toujours soit vide, soit une URL absolue http(s) — voir la
+   * normalisation dans worker/reducer.ts, qui s'applique même à un message
+   * envoyé directement en websocket sans passer par le formulaire du
+   * client. Optionnel pour les mêmes raisons que `status` ci-dessus. */
+  link?: string;
   createdAt: number;
   updatedAt: number;
   /** Image jointe (photo ou capture d'écran) — voir
@@ -68,7 +74,7 @@ export type ClientMessage =
   | { type: "sync" }
   | { type: "renameList"; name: string }
   | { type: "addItem"; id: string; rawText: string; recipientId: string | null }
-  | { type: "updateItem"; id: string; name?: string; quantity?: string; recipientId?: string | null; status?: GiftStatus }
+  | { type: "updateItem"; id: string; name?: string; quantity?: string; recipientId?: string | null; status?: GiftStatus; link?: string }
   | { type: "toggleItem"; id: string; checked: boolean }
   | { type: "deleteItem"; id: string }
   | { type: "clearChecked" }

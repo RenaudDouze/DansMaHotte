@@ -384,6 +384,68 @@ test("cliquer le badge de statut referme le menu s'il était déjà ouvert, et c
   await expect(page.locator(".status-picker")).toHaveCount(0);
 });
 
+test("on peut ajouter, modifier et retirer le lien d'un cadeau", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.fill("#add-input", "Lego");
+  await page.click(".add-submit");
+  await expect(page.locator(".item")).toHaveCount(1);
+
+  const linkBtn = page.locator(".item-link");
+  await expect(linkBtn).toHaveClass(/item-link-empty/);
+
+  // Saisir un lien sans schéma explicite : normalisé en https:// côté
+  // serveur (voir worker/reducer.ts normalizeLink).
+  await linkBtn.click();
+  const editor = page.locator(".link-editor");
+  await expect(editor.locator(".link-editor-open")).toHaveCount(0);
+  await editor.locator(".link-editor-input").fill("exemple.fr/lego");
+  await editor.locator("button[type=submit]").click();
+  await expect(editor).toHaveCount(0);
+  await expect(linkBtn).toHaveClass(/item-link-set/);
+
+  // Persiste après rechargement (aller-retour serveur, pas juste local).
+  await page.reload();
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+  await expect(page.locator(".item-link")).toHaveClass(/item-link-set/);
+
+  // Rouvrir affiche le lien courant, avec un raccourci pour l'ouvrir.
+  await page.locator(".item-link").click();
+  const reopened = page.locator(".link-editor");
+  await expect(reopened.locator(".link-editor-open")).toHaveAttribute("href", "https://exemple.fr/lego");
+  await expect(reopened.locator(".link-editor-input")).toHaveValue("https://exemple.fr/lego");
+
+  // Le retirer repasse le bouton en état "vide".
+  await reopened.locator(".link-editor-remove").click();
+  await expect(reopened).toHaveCount(0);
+  await expect(page.locator(".item-link")).toHaveClass(/item-link-empty/);
+});
+
+test("cliquer le bouton de lien referme le popover s'il était déjà ouvert, et cliquer ailleurs le referme aussi", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.fill("#add-input", "Lego");
+  await page.click(".add-submit");
+  await expect(page.locator(".item")).toHaveCount(1);
+
+  const linkBtn = page.locator(".item-link");
+  await linkBtn.click();
+  await expect(page.locator(".link-editor")).toHaveCount(1);
+  await linkBtn.click();
+  await expect(page.locator(".link-editor")).toHaveCount(0);
+
+  await linkBtn.click();
+  await expect(page.locator(".link-editor")).toHaveCount(1);
+  await page.locator(".list-privacy-note").click();
+  await expect(page.locator(".link-editor")).toHaveCount(0);
+});
+
 test("on peut choisir manuellement la couleur d'une personne, puis revenir à l'automatique", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");

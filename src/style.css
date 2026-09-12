@@ -703,6 +703,79 @@ button:focus-visible {
   pointer-events: none;
 }
 
+.item-link {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--checked-bg);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.9rem;
+}
+
+.item-link-empty {
+  border-style: dashed;
+}
+
+.item-link-set {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+/* Popover flottant d'édition du lien (voir openLinkEditor) : même principe
+   de positionnement que .status-picker. */
+.link-editor {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 240px;
+  max-width: calc(100vw - 16px);
+  padding: 0.6rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+.link-editor-open {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-editor-form {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.link-editor-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.link-editor-remove {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0;
+}
+
 .item-delete {
   flex-shrink: 0;
   font-size: 1rem;

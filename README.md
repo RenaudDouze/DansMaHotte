@@ -25,6 +25,8 @@ de données externe).
 - **Photo par cadeau** : ajoute une photo ou une capture d'écran à un cadeau
   (ex: le produit repéré en ligne), consultable en plein écran et
   remplaçable/supprimable à tout moment.
+- **Lien par cadeau** : ajoute un lien vers une page web (ex: la fiche
+  produit), modifiable ou supprimable depuis le même petit popover.
 - **Import / export** au format JSON, avec fusion ou remplacement à
   l'import.
 - **Hors-ligne minimal** : la dernière version connue de chaque liste est
