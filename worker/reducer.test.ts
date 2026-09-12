@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyMessage, nextOrder, validRecipientId } from "./reducer";
+import { applyMessage, nextOrder, validRecipientId, normalizeLink } from "./reducer";
 import type { ListState } from "../shared/types";
 
 function makeState(overrides: Partial<ListState> = {}): ListState {
@@ -37,6 +37,27 @@ describe("validRecipientId", () => {
 
   it("retombe sur null si le destinataire n'existe pas (ex: supprimé entre-temps)", () => {
     expect(validRecipientId(makeState(), "ghost")).toBeNull();
+  });
+});
+
+describe("normalizeLink", () => {
+  it("renvoie une chaîne vide pour une entrée vide ou blanche", () => {
+    expect(normalizeLink("")).toBe("");
+    expect(normalizeLink("   ")).toBe("");
+  });
+
+  it("laisse une URL http(s) telle quelle (après trim)", () => {
+    expect(normalizeLink("https://exemple.fr/cadeau")).toBe("https://exemple.fr/cadeau");
+    expect(normalizeLink("  http://exemple.fr  ")).toBe("http://exemple.fr");
+  });
+
+  it("préfixe https:// quand le schéma est absent", () => {
+    expect(normalizeLink("exemple.fr")).toBe("https://exemple.fr");
+    expect(normalizeLink("www.exemple.fr")).toBe("https://www.exemple.fr");
+  });
+
+  it("est insensible à la casse du schéma", () => {
+    expect(normalizeLink("HTTPS://exemple.fr")).toBe("HTTPS://exemple.fr");
   });
 });
 
@@ -152,6 +173,26 @@ describe("applyMessage", () => {
       applyMessage(state, { type: "updateItem", id: "i1", status: "commande" }, NOW);
       applyMessage(state, { type: "updateItem", id: "i1", quantity: "3" }, NOW);
       expect(state.items[0].status).toBe("commande");
+    });
+
+    it("met à jour le lien quand il est fourni, en le normalisant", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", link: "exemple.fr/lego" }, NOW);
+      expect(state.items[0].link).toBe("https://exemple.fr/lego");
+    });
+
+    it("permet de vider le lien explicitement", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", link: "https://exemple.fr" }, NOW);
+      applyMessage(state, { type: "updateItem", id: "i1", link: "" }, NOW);
+      expect(state.items[0].link).toBe("");
+    });
+
+    it("ne touche pas le lien quand il n'est pas fourni", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", link: "https://exemple.fr" }, NOW);
+      applyMessage(state, { type: "updateItem", id: "i1", quantity: "3" }, NOW);
+      expect(state.items[0].link).toBe("https://exemple.fr");
     });
 
     it("ignore un id inconnu", () => {

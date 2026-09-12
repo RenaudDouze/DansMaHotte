@@ -17,6 +17,17 @@ export function validRecipientId(state: ListState, id: string | null): string | 
   return state.recipients.some((r) => r.id === id) ? id : null;
 }
 
+/** Always either "" or an absolute http(s) URL — enforced here rather than
+ * only client-side, since anyone with the list code can send a raw
+ * `updateItem` over the websocket without going through the app's own form.
+ * A missing scheme (e.g. "monsite.fr") is assumed to mean https, rather than
+ * rejected outright. */
+export function normalizeLink(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 /** Mutates `state` in place to apply one client message. */
 export function applyMessage(state: ListState, msg: ClientMessage, now: number = Date.now()): void {
   switch (msg.type) {
@@ -56,6 +67,7 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       if (msg.quantity !== undefined) item.quantity = msg.quantity;
       if (msg.recipientId !== undefined) item.recipientId = validRecipientId(state, msg.recipientId);
       if (msg.status !== undefined) item.status = msg.status;
+      if (msg.link !== undefined) item.link = normalizeLink(msg.link);
       item.updatedAt = now;
       return;
     }
