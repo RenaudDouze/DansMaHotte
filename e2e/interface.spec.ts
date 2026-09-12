@@ -119,7 +119,7 @@ test("les listes favorites sont épinglées au-dessus des autres, sans code affi
   await expect(page.locator(".card h2")).toHaveText(["Listes récentes", "Nouvelle liste", "Rejoindre une liste"]);
 });
 
-test("une personne sans cadeau dans la liste reste gérable mais ne s'affiche pas", async ({ page }) => {
+test("une personne sans cadeau reste visible dans la liste (pour ne pas l'oublier), mais disparaît le temps d'une recherche", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");
   await page.waitForURL(/\/l\//);
@@ -135,14 +135,24 @@ test("une personne sans cadeau dans la liste reste gérable mais ne s'affiche pa
   await expect(page.locator(".manage-recipient-list li", { hasText: "Paul" })).toHaveCount(1);
   await page.keyboard.press("Escape");
 
-  // Un seul cadeau, pour "Marie" : "Paul" (encore vide) n'a rien à montrer
-  // et ne doit pas encombrer la liste avec un en-tête vide.
+  // Un seul cadeau, pour "Marie" : "Paul" (encore vide) doit quand même
+  // apparaître, avec un petit texte indiquant qu'il n'a rien pour l'instant.
   await page.selectOption("#add-recipient", { label: "Marie" });
   await page.fill("#add-input", "Lego");
   await page.click(".add-submit");
 
+  await expect(page.locator(".person-name")).toHaveText(["Marie", "Paul"]);
+  await expect(page.locator(".recipient-section")).toHaveCount(2);
+  const paulSection = page.locator(".recipient-section", { has: page.locator(".person-name", { hasText: "Paul" }) });
+  await expect(paulSection.locator(".item")).toHaveCount(0);
+  await expect(paulSection.locator(".recipient-empty")).toHaveText("Aucun cadeau pour l'instant");
+
+  // Pendant une recherche, une section vide n'a rien d'utile à montrer.
+  await page.click("#btn-search");
+  await page.fill("#search-input", "Lego");
   await expect(page.locator(".person-name")).toHaveText(["Marie"]);
-  await expect(page.locator(".recipient-section")).toHaveCount(1);
+  await page.click("#search-close");
+  await expect(page.locator(".person-name")).toHaveText(["Marie", "Paul"]);
 
   // Les deux personnes restent proposables/gérables ailleurs.
   await expect(page.locator("#add-recipient option")).toHaveText(["Sans destinataire", "Marie", "Paul"]);

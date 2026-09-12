@@ -535,6 +535,14 @@ button:focus-visible {
   min-height: 0.5rem;
 }
 
+.recipient-empty {
+  margin: 0;
+  padding: 0.2rem 0.4rem 0.6rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
 .item {
   position: relative;
   border-radius: 12px;

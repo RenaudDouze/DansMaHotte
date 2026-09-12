@@ -775,6 +775,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       state!.items.filter(
         (i) => i.recipientId === recipientId && (!query || i.name.toLowerCase().includes(query)) && (!hideChecked || !i.checked),
       );
+    const hasAnyGift = (recipientId: string | null): boolean => state!.items.some((i) => i.recipientId === recipientId);
     const sortItems = (items: Item[]): Item[] =>
       [...items].sort(
         (a, b) => Number(a.checked) - Number(b.checked) || (alphabeticalItems ? alnumCompare(a.name, b.name) : a.order - b.order),
@@ -796,11 +797,13 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       groups.push({ id: null, name: "Sans destinataire", items: unassigned, showHeader: true, hue: 0 });
     }
 
-    // Une personne sans cadeau (dans cette liste, ou ne correspondant pas à
-    // la recherche en cours) n'a rien à montrer — elle reste gérable via
-    // "Gérer les personnes", mais son en-tête n'encombre pas la liste tant
-    // qu'elle est vide.
-    groups = groups.filter((g) => g.items.length > 0);
+    // Une personne reste affichée même sans aucun cadeau (pour ne pas
+    // l'oublier, et pour pouvoir lui glisser-déposer un premier cadeau) —
+    // sauf pendant une recherche ou avec "masquer les cadeaux cochés", où
+    // une section vide n'a rien d'utile à montrer. Le pseudo-groupe "Sans
+    // destinataire"/"Cadeaux" (id null), lui, ne s'affiche que s'il a
+    // effectivement quelque chose dedans.
+    groups = groups.filter((g) => g.items.length > 0 || (g.id !== null && !query && !hasAnyGift(g.id)));
 
     // Une personne dont tous les cadeaux sont cochés passe après celles
     // encore en cours, même logique que pour les cadeaux au sein d'une
@@ -824,7 +827,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       return;
     }
 
-    if (groups.every((g) => g.items.length === 0)) {
+    if (groups.length === 0) {
       container.innerHTML = `<div class="empty-state">Ta liste est vide. Ajoute un premier cadeau ci-dessus 👆</div>`;
       disposeItemDnd?.();
       disposeRecipientDnd?.();
@@ -849,6 +852,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         <ul class="item-list" data-recipient-id="${g.id ?? ""}">
           ${g.items.map((item) => itemRowHtml(item, code)).join("")}
         </ul>
+        ${g.id && g.items.length === 0 ? `<p class="recipient-empty">Aucun cadeau pour l'instant</p>` : ""}
       </section>`,
       )
       .join("");

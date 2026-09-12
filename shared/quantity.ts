@@ -47,7 +47,12 @@ function normalizeUnit(n: string, unit: string): string {
   return `${n.replace(",", ".")} ${unit.toLowerCase()}`;
 }
 
-/** Tries to read a quantity out of a single token, e.g. "500g", "x3", "3x", "2". */
+/** Tries to read a quantity out of a single token, e.g. "500g", "x3", "3x".
+ * Deliberately does NOT match a bare number on its own (e.g. "2") : dans une
+ * liste de cadeaux, un nombre isolé fait presque toujours partie du nom
+ * (référence produit, tome d'une collection...) plutôt que d'indiquer une
+ * quantité — contrairement à une liste de courses, où "2 pommes" veut bien
+ * dire une quantité de deux. Un "x3"/"3x" ou "500g" reste sans ambiguïté. */
 function matchSingleToken(token: string): string | null {
   let m = token.match(NUMBER_UNIT);
   if (m) return normalizeUnit(m[1], m[2]);
@@ -55,8 +60,6 @@ function matchSingleToken(token: string): string | null {
   if (m) return `x${m[1]}`;
   m = token.match(X_SUFFIX);
   if (m) return `x${m[1]}`;
-  m = token.match(BARE_NUMBER);
-  if (m) return m[1].replace(",", ".");
   return null;
 }
 
