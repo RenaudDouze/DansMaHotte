@@ -3,7 +3,6 @@
 // runtime (storage, WebSockets, ctx...).
 
 import type { ListState, ClientMessage, Item, Recipient } from "../shared/types";
-import { parseFreeText } from "../shared/quantity";
 
 export function nextOrder(list: { order: number }[]): number {
   return list.length === 0 ? 0 : Math.max(...list.map((x) => x.order)) + 1;
@@ -28,6 +27,17 @@ export function normalizeLink(raw: string): string {
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
+/** A valid price is always a finite number >= 0, rounded to the cent — an
+ * out-of-range value (negative, NaN, infinite) is silently ignored rather
+ * than stored, since this is enforced here rather than only client-side (see
+ * normalizeLink above for why). Returns undefined for an invalid input, so
+ * the caller can leave the item's price untouched instead of overwriting it
+ * with garbage. */
+export function normalizePrice(price: number): number | undefined {
+  if (!Number.isFinite(price) || price < 0) return undefined;
+  return Math.round(price * 100) / 100;
+}
+
 /** Mutates `state` in place to apply one client message. */
 export function applyMessage(state: ListState, msg: ClientMessage, now: number = Date.now()): void {
   switch (msg.type) {
@@ -41,12 +51,11 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
     }
 
     case "addItem": {
-      const { name, quantity } = parseFreeText(msg.rawText);
+      const name = msg.rawText.trim();
       if (!name) return;
       const item: Item = {
         id: msg.id,
         name,
-        quantity,
         recipientId: validRecipientId(state, msg.recipientId),
         checked: false,
         order: nextOrder(state.items),
@@ -64,10 +73,17 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       const item = state.items.find((i) => i.id === msg.id);
       if (!item) return;
       if (msg.name !== undefined) item.name = msg.name;
-      if (msg.quantity !== undefined) item.quantity = msg.quantity;
       if (msg.recipientId !== undefined) item.recipientId = validRecipientId(state, msg.recipientId);
       if (msg.status !== undefined) item.status = msg.status;
       if (msg.link !== undefined) item.link = normalizeLink(msg.link);
+      if (msg.price !== undefined) {
+        if (msg.price === null) {
+          delete item.price;
+        } else {
+          const normalized = normalizePrice(msg.price);
+          if (normalized !== undefined) item.price = normalized;
+        }
+      }
       item.updatedAt = now;
       return;
     }

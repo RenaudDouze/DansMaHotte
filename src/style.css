@@ -188,6 +188,16 @@ button:focus-visible {
   margin: 0.4rem 0 0;
 }
 
+/* Somme de tous les cadeaux de la liste — voir updateTotals. Masquée tant
+   qu'aucun prix n'est renseigné (pas de "0,00 €" sur une liste qui n'utilise
+   pas cette fonctionnalité). */
+.totals-bar {
+  margin: 0.6rem 0 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -424,22 +434,9 @@ button:focus-visible {
   gap: 0.4rem;
 }
 
-.add-input-wrap {
+.add-input {
   flex: 1;
-  position: relative;
-  display: flex;
-  align-items: center;
   min-width: 0;
-}
-
-.add-input-wrap input {
-  width: 100%;
-  padding-right: 3.4rem;
-}
-
-.qty-preview {
-  position: absolute;
-  right: 0.4rem;
 }
 
 #add-recipient {
@@ -487,6 +484,12 @@ button:focus-visible {
 
 .recipient-count {
   font-variant-numeric: tabular-nums;
+}
+
+.recipient-total {
+  font-variant-numeric: tabular-nums;
+  color: var(--primary);
+  font-weight: 700;
 }
 
 .person-dot,
@@ -598,7 +601,7 @@ button:focus-visible {
   flex-shrink: 0;
 }
 
-.qty-badge {
+.item-price {
   flex-shrink: 0;
   background: var(--primary);
   color: var(--primary-contrast);
@@ -612,7 +615,7 @@ button:focus-visible {
   white-space: nowrap;
 }
 
-.qty-badge.qty-empty {
+.item-price.item-price-empty {
   background: var(--checked-bg);
   color: var(--text-muted);
 }

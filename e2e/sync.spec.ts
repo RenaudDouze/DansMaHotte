@@ -15,11 +15,10 @@ test("deux appareils sur la même liste se synchronisent en temps réel", async 
   await page2.goto(`/l/${code}`);
   await expect(page2.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
 
-  await page1.fill("#add-input", "Peluches x8");
+  await page1.fill("#add-input", "Peluches");
   await page1.click(".add-submit");
 
   await expect(page2.locator(".item .item-name")).toHaveText("Peluches", { timeout: 5000 });
-  await expect(page2.locator(".item .qty-badge")).toHaveText("x8");
 
   await page1.click("#list-title");
   await page1.fill(".list-title .inline-edit", "Cadeaux renommés");

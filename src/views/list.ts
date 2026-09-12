@@ -1,6 +1,5 @@
 import type { Recipient, Item, ListState, GiftStatus } from "../../shared/types";
 import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES, GIFT_STATUSES, GIFT_STATUS_LABELS } from "../../shared/types";
-import { parseFreeText } from "../../shared/quantity";
 import { ListConnection } from "../lib/ws";
 import { fetchListState, itemImageUrl, uploadItemImage, deleteItemImage } from "../lib/http";
 import { cacheListState, getCachedListState, touchRecentList } from "../lib/storage";
@@ -57,6 +56,23 @@ const GIFT_STATUS_COLORS: Record<GiftStatus, string> = {
   a_plusieurs: "#2b8f86",
   emballe: "var(--favorite)",
 };
+
+/** Format d'affichage français : "12,50 €" (toujours 2 décimales). */
+function formatPrice(price: number): string {
+  return `${price.toFixed(2).replace(".", ",")} €`;
+}
+
+/** Lit la saisie libre d'un champ prix (virgule ou point comme séparateur
+ * décimal). `null` = champ vidé volontairement (efface le prix) ;
+ * `undefined` = saisie invalide, à rejeter sans rien envoyer au serveur
+ * (qui revalide de toute façon, voir worker/reducer.ts). */
+function parsePriceInput(raw: string): number | null | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = Number.parseFloat(trimmed.replace(",", "."));
+  if (!Number.isFinite(value) || value < 0) return undefined;
+  return Math.round(value * 100) / 100;
+}
 
 function colorPaletteHtml(recipient: Recipient): string {
   const autoSelected = recipient.color === undefined;
@@ -262,7 +278,21 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       updateRecipientSelect();
     }
     renderRecipients();
+    updateTotals();
     checkCelebration();
+  }
+
+  /** Somme des prix de tous les cadeaux de la liste, tous destinataires
+   * confondus — indépendante de la recherche ou de "masquer les cadeaux
+   * cochés" en cours, qui ne concernent que l'affichage des cadeaux. Masquée
+   * tant qu'aucun prix n'est renseigné, pour ne pas afficher "0,00 €" sur
+   * une liste qui n'utilise pas cette fonctionnalité. */
+  function updateTotals(): void {
+    const el = root.querySelector("#totals-bar") as HTMLElement | null;
+    if (!el || !state) return;
+    const total = state.items.reduce((sum, i) => sum + (i.price ?? 0), 0);
+    el.hidden = total === 0;
+    el.textContent = `Total : ${formatPrice(total)}`;
   }
 
   function checkCelebration(): void {
@@ -596,17 +626,8 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   function wireAddForm(): void {
     const form = root.querySelector("#add-form") as HTMLFormElement | null;
     const input = root.querySelector("#add-input") as HTMLInputElement | null;
-    const preview = root.querySelector("#add-preview-qty") as HTMLElement | null;
     const recipientSelect = root.querySelector("#add-recipient") as HTMLSelectElement | null;
     if (!form || !input) return;
-
-    input.addEventListener("input", () => {
-      const { quantity } = parseFreeText(input.value);
-      if (preview) {
-        preview.hidden = !quantity;
-        preview.textContent = quantity;
-      }
-    });
 
     form.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -615,7 +636,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       const recipientId = recipientSelect?.value || null;
       conn.send({ type: "addItem", id: uid(), rawText, recipientId });
       input.value = "";
-      if (preview) preview.hidden = true;
       input.focus();
     });
   }
@@ -776,6 +796,11 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         (i) => i.recipientId === recipientId && (!query || i.name.toLowerCase().includes(query)) && (!hideChecked || !i.checked),
       );
     const hasAnyGift = (recipientId: string | null): boolean => state!.items.some((i) => i.recipientId === recipientId);
+    // Toujours calculé sur l'ensemble des cadeaux de la personne, indépendamment
+    // de la recherche ou de "masquer les cadeaux cochés" en cours : le budget
+    // d'une personne ne doit pas varier selon l'affichage du moment.
+    const recipientTotal = (recipientId: string | null): number =>
+      state!.items.filter((i) => i.recipientId === recipientId).reduce((sum, i) => sum + (i.price ?? 0), 0);
     const sortItems = (items: Item[]): Item[] =>
       [...items].sort(
         (a, b) => Number(a.checked) - Number(b.checked) || (alphabeticalItems ? alnumCompare(a.name, b.name) : a.order - b.order),
@@ -845,6 +870,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
                 ${g.id ? `<button class="drag-handle recipient-drag-handle" aria-label="Réordonner la personne">${icons.gripVertical}</button>` : `<span class="drag-handle-spacer"></span>`}
                 ${g.id ? `<span class="person-dot" aria-hidden="true"></span>` : ""}
                 <span class="person-name" data-id="${g.id ?? ""}">${escapeHtml(g.name)}</span>
+                ${recipientTotal(g.id) > 0 ? `<span class="recipient-total">${formatPrice(recipientTotal(g.id))}</span>` : ""}
                 <span class="recipient-count">${g.items.filter((i) => !i.checked).length}</span>
               </header>`
             : ""
@@ -916,14 +942,22 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       });
     });
 
-    container.querySelectorAll<HTMLElement>(".qty-badge").forEach((el) => {
+    container.querySelectorAll<HTMLElement>(".item-price").forEach((el) => {
       el.addEventListener("click", () => {
         const item = state!.items.find((i) => i.id === el.dataset.id);
         if (!item) return;
         startEdit(el, {
-          value: item.quantity,
-          placeholder: "ex: 2, x3",
-          onCommit: (value) => conn.send({ type: "updateItem", id: item.id, quantity: value }),
+          value: item.price !== undefined ? formatPrice(item.price).replace(" €", "") : "",
+          placeholder: "Prix en €",
+          onCommit: (value) => {
+            const price = parsePriceInput(value);
+            if (price === undefined) {
+              showToast("Prix invalide.");
+              renderRecipients();
+              return;
+            }
+            conn.send({ type: "updateItem", id: item.id, price });
+          },
         });
       });
     });
@@ -1067,7 +1101,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <button class="drag-handle item-drag-handle" aria-label="Déplacer">${icons.gripVertical}</button>
           <input type="checkbox" class="item-check" data-id="${item.id}" ${item.checked ? "checked" : ""} />
           <button type="button" class="item-status" data-id="${item.id}" aria-haspopup="true" aria-expanded="false" aria-label="Statut : ${GIFT_STATUS_LABELS[status]} (cliquer pour changer)">${GIFT_STATUS_LABELS[status]}</button>
-          <span class="qty-badge ${item.quantity ? "" : "qty-empty"}" data-id="${item.id}">${escapeHtml(item.quantity) || "+"}</span>
+          <span class="item-price ${item.price !== undefined ? "" : "item-price-empty"}" data-id="${item.id}">${item.price !== undefined ? formatPrice(item.price) : "+"}</span>
           <span class="item-name" data-id="${item.id}">${escapeHtml(item.name)}</span>
           <button type="button" class="item-photo${item.hasImage ? "" : " item-photo-empty"}" data-action="item-photo" data-id="${item.id}" aria-label="${item.hasImage ? `Voir la photo de « ${escapeHtml(item.name)} »` : `Ajouter une photo à « ${escapeHtml(item.name)} »`}">${photoContent}</button>
           <input type="file" class="item-image-input" data-id="${item.id}" accept="${ALLOWED_IMAGE_TYPES.join(",")}" hidden />
@@ -1118,10 +1152,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
         <form id="add-form" class="add-form">
           <div class="add-row">
-            <div class="add-input-wrap">
-              <input id="add-input" type="text" placeholder="Ajouter un cadeau… (ex: 2x Lego)" autocomplete="off" />
-              <span id="add-preview-qty" class="qty-badge qty-preview" hidden></span>
-            </div>
+            <input id="add-input" class="add-input" type="text" placeholder="Ajouter un cadeau…" autocomplete="off" />
             <select id="add-recipient" aria-label="Personne">
               ${recipientOptionsHtml(s.recipients)}
             </select>
@@ -1129,6 +1160,8 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           </div>
         </form>
         <p class="add-form-hint">${privacyHint()}</p>
+
+        <p class="totals-bar" id="totals-bar" hidden></p>
 
         <div id="recipients" class="recipients"></div>
 
