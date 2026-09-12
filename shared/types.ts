@@ -10,8 +10,21 @@ export interface Recipient {
   color?: number;
 }
 
-/** 0 = Basse, 1 = Normale, 2 = Haute. */
-export type Priority = 0 | 1 | 2;
+/** Où en est un cadeau, de l'idée jusqu'à son emballage. "À plusieurs" n'est
+ * pas une étape du parcours mais un statut à part : le cadeau est pris en
+ * commun avec quelqu'un d'autre. */
+export type GiftStatus = "idee" | "achete" | "commande" | "recu" | "a_plusieurs" | "emballe";
+
+export const GIFT_STATUSES: readonly GiftStatus[] = ["idee", "achete", "commande", "recu", "a_plusieurs", "emballe"];
+
+export const GIFT_STATUS_LABELS: Record<GiftStatus, string> = {
+  idee: "Idée",
+  achete: "Acheté",
+  commande: "Commandé",
+  recu: "Reçu",
+  a_plusieurs: "À plusieurs",
+  emballe: "Emballé",
+};
 
 /** Taille max d'une image jointe à un cadeau (photo ou capture d'écran). */
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -29,8 +42,8 @@ export interface Item {
   checked: boolean;
   order: number;
   /** Optional for backward compatibility with items created before this
-   * field existed — always read via `item.priority ?? 1` (Normale). */
-  priority?: Priority;
+   * field existed — always read via `item.status ?? "idee"`. */
+  status?: GiftStatus;
   createdAt: number;
   updatedAt: number;
   /** Image jointe (photo ou capture d'écran) — voir
@@ -55,7 +68,7 @@ export type ClientMessage =
   | { type: "sync" }
   | { type: "renameList"; name: string }
   | { type: "addItem"; id: string; rawText: string; recipientId: string | null }
-  | { type: "updateItem"; id: string; name?: string; quantity?: string; recipientId?: string | null; priority?: Priority }
+  | { type: "updateItem"; id: string; name?: string; quantity?: string; recipientId?: string | null; status?: GiftStatus }
   | { type: "toggleItem"; id: string; checked: boolean }
   | { type: "deleteItem"; id: string }
   | { type: "clearChecked" }

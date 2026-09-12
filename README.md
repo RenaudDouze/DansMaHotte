@@ -19,6 +19,9 @@ de données externe).
   crée une personne, fais glisser les cadeaux vers elle, réordonne les
   personnes elles-mêmes.
 - **Déplacement des cadeaux** par glisser-déposer (souris et tactile).
+- **Statut par cadeau** : Idée, Acheté, Commandé, Reçu, À plusieurs ou
+  Emballé — choisi dans un petit menu coloré, sur le même principe que sur
+  OnMangeQuoi.
 - **Photo par cadeau** : ajoute une photo ou une capture d'écran à un cadeau
   (ex: le produit repéré en ligne), consultable en plein écran et
   remplaçable/supprimable à tout moment.

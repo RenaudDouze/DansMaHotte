@@ -73,7 +73,7 @@ describe("applyMessage", () => {
           recipientId: "r1",
           checked: false,
           order: 0,
-          priority: 1,
+          status: "idee",
           createdAt: NOW,
           updatedAt: NOW,
           hasImage: false,
@@ -141,17 +141,17 @@ describe("applyMessage", () => {
       expect(state.items[0].recipientId).toBeNull();
     });
 
-    it("met à jour la priorité quand elle est fournie", () => {
+    it("met à jour le statut quand il est fourni", () => {
       const state = withItem();
-      applyMessage(state, { type: "updateItem", id: "i1", priority: 2 }, NOW);
-      expect(state.items[0].priority).toBe(2);
+      applyMessage(state, { type: "updateItem", id: "i1", status: "commande" }, NOW);
+      expect(state.items[0].status).toBe("commande");
     });
 
-    it("ne touche pas la priorité quand elle n'est pas fournie", () => {
+    it("ne touche pas le statut quand il n'est pas fourni", () => {
       const state = withItem();
-      applyMessage(state, { type: "updateItem", id: "i1", priority: 2 }, NOW);
+      applyMessage(state, { type: "updateItem", id: "i1", status: "commande" }, NOW);
       applyMessage(state, { type: "updateItem", id: "i1", quantity: "3" }, NOW);
-      expect(state.items[0].priority).toBe(2);
+      expect(state.items[0].status).toBe("commande");
     });
 
     it("ignore un id inconnu", () => {

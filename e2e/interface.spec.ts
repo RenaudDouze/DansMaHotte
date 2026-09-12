@@ -279,7 +279,7 @@ test("une personne dont tous les cadeaux sont cochés passe après les autres", 
   await expect(page.locator(".person-name")).toHaveText(["Marie", "Paul"]);
 });
 
-test("la priorité d'un cadeau se cycle par clic, sans changer l'ordre des cadeaux ni des personnes", async ({ page }) => {
+test("le statut d'un cadeau se choisit dans un petit menu, sans changer l'ordre des cadeaux ni des personnes", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");
   await page.waitForURL(/\/l\//);
@@ -304,42 +304,36 @@ test("la priorité d'un cadeau se cycle par clic, sans changer l'ordre des cadea
   await page.fill("#add-input", "Stylo");
   await page.click(".add-submit");
 
-  // Par défaut, tous les cadeaux sont en priorité Normale.
+  // Par défaut, tous les cadeaux sont au statut "Idée".
   await expect(page.locator(".person-name")).toHaveText(["Marie", "Paul"]);
   await expect(page.locator(".item-name")).toHaveText(["Écharpe", "Lego", "Livre", "Stylo"]);
   const livreItem = page.locator(".item", { has: page.locator(".item-name", { hasText: "Livre" }) });
-  const livrePriority = livreItem.locator(".item-priority");
-  await expect(livreItem).toHaveAttribute("data-priority", "1");
-  await expect(livrePriority).toHaveAttribute("aria-label", /Normale/);
+  const livreStatus = livreItem.locator(".item-status");
+  await expect(livreStatus).toHaveText("Idée");
 
-  // Un clic fait passer Normale -> Haute : ni le cadeau ni sa personne ne
-  // bougent, seule son apparence change.
-  await livrePriority.click();
-  await expect(livreItem).toHaveAttribute("data-priority", "2");
-  await expect(livrePriority).toHaveAttribute("aria-label", /Haute/);
-  await expect(page.locator(".item-name")).toHaveText(["Écharpe", "Lego", "Livre", "Stylo"]);
-  await expect(page.locator(".person-name")).toHaveText(["Marie", "Paul"]);
-
-  // Deux clics font passer Normale -> Haute -> Basse. Chaque clic attend la
-  // confirmation serveur avant le suivant : sinon, le second clic partirait
-  // de l'état encore local du premier (aller-retour WebSocket asynchrone),
-  // et les deux enverraient "Haute" au lieu d'avancer le cycle.
-  await livrePriority.click();
-  await expect(livreItem).toHaveAttribute("data-priority", "0");
-  await expect(livrePriority).toHaveAttribute("aria-label", /Basse/);
+  // Cliquer le badge ouvre un menu listant les 6 statuts ; en choisir un le
+  // referme et l'applique : ni le cadeau ni sa personne ne bougent, seule
+  // son apparence change.
+  await livreStatus.click();
+  const picker = page.locator(".status-picker");
+  await expect(picker.locator(".status-pill")).toHaveText(["Idée", "Acheté", "Commandé", "Reçu", "À plusieurs", "Emballé"]);
+  await expect(picker.locator('.status-pill[aria-pressed="true"]')).toHaveText("Idée");
+  await picker.locator(".status-pill", { hasText: "Commandé" }).click();
+  await expect(picker).toHaveCount(0);
+  await expect(livreStatus).toHaveText("Commandé");
   await expect(page.locator(".item-name")).toHaveText(["Écharpe", "Lego", "Livre", "Stylo"]);
   await expect(page.locator(".person-name")).toHaveText(["Marie", "Paul"]);
 
   // Persiste après rechargement (aller-retour serveur, pas juste local).
   await page.reload();
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
-  await expect(livreItem).toHaveAttribute("data-priority", "0");
+  await expect(livreStatus).toHaveText("Commandé");
 });
 
-test("changer la priorité s'affiche immédiatement, sans attendre la confirmation serveur", async ({ page }) => {
+test("changer le statut s'affiche immédiatement, sans attendre la confirmation serveur", async ({ page }) => {
   // Retarde artificiellement tous les messages entrants (serveur -> page) le
   // temps du test, mais laisse circuler ceux sortants (page -> serveur)
-  // sans délai : si le badge de priorité n'apparaissait qu'après l'aller-
+  // sans délai : si le badge de statut n'apparaissait qu'après l'aller-
   // retour serveur (comme avant la mise à jour optimiste), l'assertion au
   // timeout court ci-dessous échouerait.
   await page.routeWebSocket(
@@ -361,10 +355,33 @@ test("changer la priorité s'affiche immédiatement, sans attendre la confirmati
   await page.click(".add-submit");
   await expect(page.locator(".item")).toHaveCount(1, { timeout: 10_000 });
 
-  const priorityBtn = page.locator(".item-priority");
-  await expect(priorityBtn).toHaveAttribute("data-priority", "1");
-  await priorityBtn.click();
-  await expect(priorityBtn).toHaveAttribute("data-priority", "2", { timeout: 400 });
+  const statusBtn = page.locator(".item-status");
+  await expect(statusBtn).toHaveText("Idée");
+  await statusBtn.click();
+  await page.locator(".status-picker .status-pill", { hasText: "Acheté" }).click();
+  await expect(statusBtn).toHaveText("Acheté", { timeout: 400 });
+});
+
+test("cliquer le badge de statut referme le menu s'il était déjà ouvert, et cliquer ailleurs le referme aussi", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.fill("#add-input", "Lego");
+  await page.click(".add-submit");
+  await expect(page.locator(".item")).toHaveCount(1);
+
+  const statusBtn = page.locator(".item-status");
+  await statusBtn.click();
+  await expect(page.locator(".status-picker")).toHaveCount(1);
+  await statusBtn.click();
+  await expect(page.locator(".status-picker")).toHaveCount(0);
+
+  await statusBtn.click();
+  await expect(page.locator(".status-picker")).toHaveCount(1);
+  await page.locator(".list-privacy-note").click();
+  await expect(page.locator(".status-picker")).toHaveCount(0);
 });
 
 test("on peut choisir manuellement la couleur d'une personne, puis revenir à l'automatique", async ({ page }) => {

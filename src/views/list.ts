@@ -1,5 +1,5 @@
-import type { Recipient, Item, ListState, Priority } from "../../shared/types";
-import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES } from "../../shared/types";
+import type { Recipient, Item, ListState, GiftStatus } from "../../shared/types";
+import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES, GIFT_STATUSES, GIFT_STATUS_LABELS } from "../../shared/types";
 import { parseFreeText } from "../../shared/quantity";
 import { ListConnection } from "../lib/ws";
 import { fetchListState, itemImageUrl, uploadItemImage, deleteItemImage } from "../lib/http";
@@ -43,11 +43,20 @@ const RECIPIENT_COLOR_HUES: readonly { hue: number; name: string }[] = [
   { hue: 330, name: "Rose" },
 ];
 
-// Item sans priority explicite (créé avant l'introduction du champ) :
-// traité comme Normale, pour ne rien changer à l'ordre existant.
-const PRIORITY_LABELS = ["Basse", "Normale", "Haute"] as const;
-const priorityOf = (item: Item): Priority => item.priority ?? 1;
-const cyclePriority = (p: Priority): Priority => (((p + 1) % 3) as Priority);
+// Item sans status explicite (créé avant l'introduction du champ) : traité
+// comme "Idée", pour ne rien changer à l'ordre existant.
+const statusOf = (item: Item): GiftStatus => item.status ?? "idee";
+
+// Une couleur par statut, du même esprit que sur OnMangeQuoi : un repère
+// visuel immédiat sans avoir à relire le libellé.
+const GIFT_STATUS_COLORS: Record<GiftStatus, string> = {
+  idee: "#8d8177",
+  achete: "#2f9e52",
+  commande: "#7c5cbf",
+  recu: "#3b6ea5",
+  a_plusieurs: "#2b8f86",
+  emballe: "var(--favorite)",
+};
 
 function colorPaletteHtml(recipient: Recipient): string {
   const autoSelected = recipient.color === undefined;
@@ -104,6 +113,12 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   let disposeItemDnd: (() => void) | null = null;
   let disposeRecipientDnd: (() => void) | null = null;
   let disposeSwipe: (() => void) | null = null;
+  // Le popover de statut ouvert, le cas échéant (voir openStatusPicker plus
+  // bas) — déclaré ici, avant le tout premier rendu synchrone (qui peut déjà
+  // afficher des cadeaux si une liste est en cache local), pour éviter une
+  // erreur de zone morte temporelle : ce même rendu appelle closeStatusPicker
+  // dès renderRecipients.
+  let activeStatusPicker: { anchor: HTMLElement; panel: HTMLElement; cleanup: () => void } | null = null;
   let shellMounted = false;
   let searchQuery = "";
   // null = pas encore évalué (évite de célébrer à l'ouverture d'une liste
@@ -602,9 +617,84 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     });
   }
 
+  function closeStatusPicker(): void {
+    if (!activeStatusPicker) return;
+    activeStatusPicker.anchor.setAttribute("aria-expanded", "false");
+    activeStatusPicker.panel.remove();
+    activeStatusPicker.cleanup();
+    activeStatusPicker = null;
+  }
+
+  /** Petit menu flottant listant les 6 statuts, ancré sous le badge cliqué —
+   * même principe que les pills de statut d'OnMangeQuoi, adapté en popover
+   * plutôt qu'une rangée toujours visible pour rester compact dans une ligne
+   * de cadeau. Positionné en `position: fixed` (et non un enfant du `.item`,
+   * qui a `overflow: hidden` pour le glisser-supprimer) afin de ne jamais
+   * être rogné par la ligne qui l'a ouvert. */
+  function openStatusPicker(anchor: HTMLButtonElement, item: Item): void {
+    closeStatusPicker();
+    const current = statusOf(item);
+    const panel = document.createElement("div");
+    panel.className = "status-picker";
+    panel.setAttribute("role", "menu");
+    panel.innerHTML = GIFT_STATUSES.map(
+      (s) =>
+        `<button type="button" class="status-pill" data-status="${s}" style="--status-color: ${GIFT_STATUS_COLORS[s]}" aria-pressed="${s === current}">${GIFT_STATUS_LABELS[s]}</button>`,
+    ).join("");
+    document.body.appendChild(panel);
+
+    const rect = anchor.getBoundingClientRect();
+    panel.style.top = `${rect.bottom + 4}px`;
+    panel.style.left = `${rect.left}px`;
+    const overflowX = panel.getBoundingClientRect().right - window.innerWidth + 8;
+    if (overflowX > 0) panel.style.left = `${Math.max(8, rect.left - overflowX)}px`;
+    anchor.setAttribute("aria-expanded", "true");
+
+    panel.querySelectorAll<HTMLButtonElement>(".status-pill").forEach((pill) => {
+      pill.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const status = pill.dataset.status as GiftStatus;
+        // Mise à jour optimiste : sans elle, le badge n'apparaît qu'après
+        // l'aller-retour serveur (contrairement à la case à cocher, qui a
+        // un retour visuel natif immédiat). L'état reçu en confirmation
+        // écrasera de toute façon cette valeur locale (voir onStateUpdate).
+        item.status = status;
+        closeStatusPicker();
+        renderRecipients();
+        conn.send({ type: "updateItem", id: item.id, status });
+      });
+    });
+
+    function onDocClick(e: MouseEvent): void {
+      if (!panel.contains(e.target as Node)) closeStatusPicker();
+    }
+    function onKeydown(e: KeyboardEvent): void {
+      if (e.key === "Escape") closeStatusPicker();
+    }
+    // Différé d'un tick : sinon le clic qui vient d'ouvrir ce popover (déjà
+    // en cours de propagation) serait aussi capté par ce même listener et le
+    // refermerait aussitôt.
+    setTimeout(() => {
+      document.addEventListener("click", onDocClick);
+      document.addEventListener("keydown", onKeydown);
+    });
+    activeStatusPicker = {
+      anchor,
+      panel,
+      cleanup: () => {
+        document.removeEventListener("click", onDocClick);
+        document.removeEventListener("keydown", onKeydown);
+      },
+    };
+  }
+
   function renderRecipients(): void {
     const container = root.querySelector("#recipients") as HTMLElement | null;
     if (!container || !state) return;
+    // Le popover référence un bouton précis du DOM actuel : sur le point de
+    // reconstruire ce DOM, mieux vaut le refermer plutôt que de le laisser
+    // pointer vers un nœud qui va disparaître.
+    closeStatusPicker();
 
     const query = searchQuery.trim().toLowerCase();
     const alphabeticalItems = getItemSortPreference() === "alphabetical";
@@ -698,18 +788,16 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       });
     });
 
-    container.querySelectorAll<HTMLElement>(".item-priority").forEach((btn) => {
-      btn.addEventListener("click", () => {
+    container.querySelectorAll<HTMLButtonElement>(".item-status").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         const item = state!.items.find((i) => i.id === btn.dataset.id);
         if (!item) return;
-        const next = cyclePriority(priorityOf(item));
-        // Mise à jour optimiste : sans elle, le badge n'apparaît qu'après
-        // l'aller-retour serveur (contrairement à la case à cocher, qui a
-        // un retour visuel natif immédiat). L'état reçu en confirmation
-        // écrasera de toute façon cette valeur locale (voir onStateUpdate).
-        item.priority = next;
-        renderRecipients();
-        conn.send({ type: "updateItem", id: item.id, priority: next });
+        if (activeStatusPicker?.anchor === btn) {
+          closeStatusPicker();
+          return;
+        }
+        openStatusPicker(btn, item);
       });
     });
 
@@ -805,7 +893,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     disposeSwipe = enableSwipeToDelete(container, {
       itemSelector: ".item",
       contentSelector: ".item-content",
-      ignoreSelector: ".item-drag-handle, .item-check, .item-priority, .item-delete, .item-photo",
+      ignoreSelector: ".item-drag-handle, .item-check, .item-status, .item-delete, .item-photo",
       onDelete: (el) => {
         const item = state!.items.find((i) => i.id === el.dataset.id);
         if (!item) return;
@@ -879,17 +967,17 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     // de le supprimer puis de le rajouter). Seul le repositionnement au sein
     // d'une même personne devient sans effet visuel dans ce mode (l'ordre
     // est alors recalculé à chaque rendu).
-    const priority = priorityOf(item);
+    const status = statusOf(item);
     const photoContent = item.hasImage
       ? `<img src="${escapeHtml(itemImageUrl(code, item.id, item.imageVersion))}" alt="" loading="lazy" />`
       : icons.image;
     return `
-      <li class="item ${item.checked ? "checked" : ""}" data-id="${item.id}" data-priority="${priority}">
+      <li class="item ${item.checked ? "checked" : ""}" data-id="${item.id}" style="--status-color: ${GIFT_STATUS_COLORS[status]}">
         <div class="item-swipe-bg" aria-hidden="true">${icons.trash}</div>
         <div class="item-content">
           <button class="drag-handle item-drag-handle" aria-label="Déplacer">${icons.gripVertical}</button>
           <input type="checkbox" class="item-check" data-id="${item.id}" ${item.checked ? "checked" : ""} />
-          <button class="item-priority" data-action="cycle-priority" data-id="${item.id}" data-priority="${priority}" aria-label="Priorité : ${PRIORITY_LABELS[priority]} (cliquer pour changer)"></button>
+          <button type="button" class="item-status" data-id="${item.id}" aria-haspopup="true" aria-expanded="false" aria-label="Statut : ${GIFT_STATUS_LABELS[status]} (cliquer pour changer)">${GIFT_STATUS_LABELS[status]}</button>
           <span class="qty-badge ${item.quantity ? "" : "qty-empty"}" data-id="${item.id}">${escapeHtml(item.quantity) || "+"}</span>
           <span class="item-name" data-id="${item.id}">${escapeHtml(item.name)}</span>
           <button type="button" class="item-photo${item.hasImage ? "" : " item-photo-empty"}" data-action="item-photo" data-id="${item.id}" aria-label="${item.hasImage ? `Voir la photo de « ${escapeHtml(item.name)} »` : `Ajouter une photo à « ${escapeHtml(item.name)} »`}">${photoContent}</button>
@@ -1013,6 +1101,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     disposeRecipientDnd?.();
     disposeSwipe?.();
     clearUndoStack();
+    closeStatusPicker();
     document.querySelectorAll(".modal-overlay").forEach((el) => el.remove());
   };
 }

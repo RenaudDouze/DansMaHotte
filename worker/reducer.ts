@@ -39,7 +39,7 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
         recipientId: validRecipientId(state, msg.recipientId),
         checked: false,
         order: nextOrder(state.items),
-        priority: 1,
+        status: "idee",
         createdAt: now,
         updatedAt: now,
         hasImage: false,
@@ -55,7 +55,7 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       if (msg.name !== undefined) item.name = msg.name;
       if (msg.quantity !== undefined) item.quantity = msg.quantity;
       if (msg.recipientId !== undefined) item.recipientId = validRecipientId(state, msg.recipientId);
-      if (msg.priority !== undefined) item.priority = msg.priority;
+      if (msg.status !== undefined) item.status = msg.status;
       item.updatedAt = now;
       return;
     }

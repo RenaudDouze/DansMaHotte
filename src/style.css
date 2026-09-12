@@ -9,8 +9,6 @@
   --primary-contrast: #ffffff;
   --danger: #c4453a;
   --favorite: #d99a00;
-  --priority-normal: #3d6a94;
-  --priority-low: #5f6b78;
   --checked-bg: #eef1ee;
   --shadow: 0 1px 3px rgba(20, 30, 25, 0.08), 0 1px 2px rgba(20, 30, 25, 0.06);
   color-scheme: light;
@@ -28,8 +26,6 @@
     --primary-contrast: #06150d;
     --danger: #e2685d;
     --favorite: #f0b429;
-    --priority-normal: #6fa8dc;
-    --priority-low: #8a97a6;
     --checked-bg: #1f2a25;
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
     color-scheme: dark;
@@ -47,8 +43,6 @@
   --primary-contrast: #06150d;
   --danger: #e2685d;
   --favorite: #f0b429;
-  --priority-normal: #6fa8dc;
-  --priority-low: #8a97a6;
   --checked-bg: #1f2a25;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
@@ -570,6 +564,11 @@ button:focus-visible {
   gap: 0.35rem;
   background: var(--surface);
   border: 1px solid var(--border);
+  /* --status-color est fixée par cadeau (voir itemRowHtml) : même variable
+     que .item-status, pour un repère de statut visible d'un coup d'œil sur
+     le bord de la ligne. */
+  border-left-width: 3px;
+  border-left-color: var(--status-color, var(--border));
   border-radius: 12px;
   padding: 0.5rem 0.5rem;
   touch-action: pan-y;
@@ -617,40 +616,58 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
-/* Petite barre verticale de couleur (gris/bleu/rouge selon la priorité) :
-   volontairement pas une pastille ronde, pour ne pas se confondre avec
-   .person-dot (le rond de couleur des personnes, dans l'en-tête). La
-   zone cliquable dépasse largement le trait visible (::before), pour
-   rester facile à toucher malgré sa finesse. */
-.item-priority {
-  position: relative;
+.item-status {
   flex-shrink: 0;
-  width: 4px;
-  height: 16px;
-  padding: 0;
-  border: none;
-  border-radius: 2px;
+  border: 1px solid var(--status-color);
+  color: var(--status-color);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 0.25em 0.6em;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
-  background: var(--priority-low);
 }
 
-.item-priority::before {
-  content: "";
-  position: absolute;
-  inset: -8px -10px;
+.item-status:hover {
+  background: var(--checked-bg);
 }
 
-.item-priority[data-priority="0"] {
-  background: var(--priority-low);
-  opacity: 0.55;
+/* Popover flottant listant les 6 statuts (voir openStatusPicker) : en
+   position: fixed plutôt qu'imbriqué dans .item, qui a overflow: hidden
+   pour le glisser-supprimer et rognerait sinon le popover. */
+.status-picker {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  max-width: 220px;
+  padding: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
 }
 
-.item-priority[data-priority="1"] {
-  background: var(--priority-normal);
+.status-pill {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 0.35em 0.7em;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.item-priority[data-priority="2"] {
-  background: var(--danger);
+.status-pill:hover {
+  background: var(--checked-bg);
+}
+
+.status-pill[aria-pressed="true"] {
+  background: var(--status-color);
+  border-color: transparent;
+  color: #fff;
 }
 
 .item-photo {
