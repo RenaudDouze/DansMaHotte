@@ -2,7 +2,6 @@ import type { ClientMessage, ServerMessage, ListState } from "../../shared/types
 import { wsUrl } from "./syncWorker";
 
 type StateListener = (state: ListState) => void;
-type PresenceListener = (names: string[]) => void;
 type ErrorListener = (message: string) => void;
 type ConnListener = (connected: boolean) => void;
 
@@ -13,18 +12,14 @@ export class ListConnection {
   private closedByUser = false;
   private queue: ClientMessage[] = [];
   private stateListeners = new Set<StateListener>();
-  private presenceListeners = new Set<PresenceListener>();
   private errorListeners = new Set<ErrorListener>();
   private connListeners = new Set<ConnListener>();
 
-  constructor(
-    private code: string,
-    private participantName: string,
-  ) {}
+  constructor(private code: string) {}
 
   connect(): void {
     this.closedByUser = false;
-    const url = wsUrl(`/api/lists/${encodeURIComponent(this.code)}/ws?name=${encodeURIComponent(this.participantName)}`);
+    const url = wsUrl(`/api/lists/${encodeURIComponent(this.code)}/ws`);
     const ws = new WebSocket(url);
     this.ws = ws;
 
@@ -43,8 +38,6 @@ export class ListConnection {
       }
       if (msg.type === "state") {
         for (const listener of this.stateListeners) listener(msg.state);
-      } else if (msg.type === "presence") {
-        for (const listener of this.presenceListeners) listener(msg.names);
       } else if (msg.type === "error") {
         for (const listener of this.errorListeners) listener(msg.message);
       }
@@ -82,11 +75,6 @@ export class ListConnection {
   onState(listener: StateListener): () => void {
     this.stateListeners.add(listener);
     return () => this.stateListeners.delete(listener);
-  }
-
-  onPresence(listener: PresenceListener): () => void {
-    this.presenceListeners.add(listener);
-    return () => this.presenceListeners.delete(listener);
   }
 
   onError(listener: ErrorListener): () => void {

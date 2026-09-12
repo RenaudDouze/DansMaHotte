@@ -373,35 +373,6 @@ button:focus-visible {
   background: var(--checked-bg);
 }
 
-.presence-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2em;
-}
-
-.presence-count {
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.presence-panel {
-  right: auto;
-  left: 0.8rem;
-  min-width: 160px;
-  padding: 0.4em 0;
-}
-
-.presence-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.presence-list li {
-  padding: 0.5em 1em;
-}
-
 .menu-item-icon {
   display: inline-flex;
   width: 1.1em;
