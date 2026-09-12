@@ -10,6 +10,7 @@ import { wireConfirmClick } from "../lib/confirmClick";
 import { enableDragReorder } from "../lib/dnd";
 import { enableSwipeToDelete } from "../lib/swipe";
 import { openShareModal } from "../components/shareModal";
+import { openAccessibilityModal } from "../components/accessibilityModal";
 import { exportListState, parseImportFile } from "../lib/importExport";
 import { icons } from "../lib/icons";
 import { trapFocus } from "../lib/focusTrap";
@@ -408,6 +409,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       renderRecipients();
     });
     panel?.querySelector('[data-action="manage-recipients"]')?.addEventListener("click", openRecipientManager);
+    panel?.querySelector('[data-action="accessibility"]')?.addEventListener("click", openAccessibilityModal);
     const clearCheckedBtn = panel?.querySelector<HTMLButtonElement>('[data-action="clear-checked"]');
     if (clearCheckedBtn) {
       wireConfirmClick(clearCheckedBtn, {
@@ -1132,6 +1134,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
             <button type="button" data-action="theme">${themeMenuHtml(getThemePreference())}</button>
             <button type="button" data-action="item-sort">${itemSortMenuHtml(getItemSortPreference())}</button>
             <button type="button" data-action="manage-recipients"><span class="menu-item-icon">${icons.user}</span>Gérer les personnes</button>
+            <button type="button" data-action="accessibility"><span class="menu-item-icon">${icons.accessibility}</span>Accessibilité</button>
             <button type="button" data-action="clear-checked"><span class="menu-item-icon">${icons.checkCircle}</span><span class="menu-item-label">Vider les cadeaux emballés</span></button>
           </div>
         </header>

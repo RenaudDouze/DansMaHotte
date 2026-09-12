@@ -34,6 +34,41 @@ test("le thème choisi persiste après un rechargement", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
 
+test("les réglages d'accessibilité s'appliquent immédiatement et persistent après un rechargement", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#btn-accessibility");
+  await expect(page.locator(".accessibility-modal")).toBeVisible();
+  await expect(page.locator("html")).not.toHaveAttribute("data-large-text", /.*/);
+  await expect(page.locator("html")).not.toHaveAttribute("data-high-contrast", /.*/);
+  await expect(page.locator("html")).not.toHaveAttribute("data-reduce-motion", /.*/);
+
+  await page.locator('input[data-key="largeText"]').check();
+  await expect(page.locator("html")).toHaveAttribute("data-large-text", "");
+  await page.locator('input[data-key="highContrast"]').check();
+  await expect(page.locator("html")).toHaveAttribute("data-high-contrast", "");
+  await page.locator('input[data-key="reduceMotion"]').check();
+  await expect(page.locator("html")).toHaveAttribute("data-reduce-motion", "");
+
+  await page.click(".modal-close");
+  await expect(page.locator(".accessibility-modal")).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-large-text", "");
+  await expect(page.locator("html")).toHaveAttribute("data-high-contrast", "");
+  await expect(page.locator("html")).toHaveAttribute("data-reduce-motion", "");
+
+  // Décocher retire l'attribut, et la préférence reste accessible depuis une
+  // liste (même réglage, pas seulement depuis l'accueil).
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+  await page.click("#btn-menu");
+  await page.click('[data-action="accessibility"]');
+  await expect(page.locator('input[data-key="largeText"]')).toBeChecked();
+  await page.locator('input[data-key="largeText"]').uncheck();
+  await expect(page.locator("html")).not.toHaveAttribute("data-large-text", /.*/);
+});
+
 test("supprimer un cadeau demande un second clic au même endroit, puis reste annulable", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");
