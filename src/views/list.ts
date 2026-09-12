@@ -1122,7 +1122,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         <div class="item-content">
           <button class="drag-handle item-drag-handle" aria-label="Déplacer">${icons.gripVertical}</button>
           <button type="button" class="item-status" data-id="${item.id}" aria-haspopup="true" aria-expanded="false" aria-label="Statut : ${GIFT_STATUS_LABELS[status]} (cliquer pour changer)">${GIFT_STATUS_LABELS[status]}</button>
-          <span class="item-price ${item.price !== undefined ? "" : "item-price-empty"}" data-id="${item.id}">${item.price !== undefined ? formatPrice(item.price) : "+"}</span>
+          <span class="item-price ${item.price !== undefined ? "" : "item-price-empty"}" data-id="${item.id}" title="${item.price !== undefined ? "Modifier le prix" : "Ajouter un prix"}">${item.price !== undefined ? formatPrice(item.price) : "€"}</span>
           <span class="item-name" data-id="${item.id}">${escapeHtml(item.name)}</span>
           <button type="button" class="item-photo${item.hasImage ? "" : " item-photo-empty"}" data-action="item-photo" data-id="${item.id}" aria-label="${item.hasImage ? `Voir la photo de « ${escapeHtml(item.name)} »` : `Ajouter une photo à « ${escapeHtml(item.name)} »`}">${photoContent}</button>
           <input type="file" class="item-image-input" data-id="${item.id}" accept="${ALLOWED_IMAGE_TYPES.join(",")}" hidden />
