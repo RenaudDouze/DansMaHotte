@@ -39,6 +39,9 @@ export interface Item {
   /** Free-form quantity label, e.g. "2", "x3". Empty string = none. */
   quantity: string;
   recipientId: string | null;
+  /** Dérivé du statut plutôt que coché indépendamment (pas de case à cocher
+   * dans une liste de cadeaux) : toujours `status === "emballe"`, maintenu
+   * par worker/reducer.ts à chaque changement de statut. */
   checked: boolean;
   order: number;
   /** Optional for backward compatibility with items created before this
@@ -75,7 +78,6 @@ export type ClientMessage =
   | { type: "renameList"; name: string }
   | { type: "addItem"; id: string; rawText: string; recipientId: string | null }
   | { type: "updateItem"; id: string; name?: string; quantity?: string; recipientId?: string | null; status?: GiftStatus; link?: string }
-  | { type: "toggleItem"; id: string; checked: boolean }
   | { type: "deleteItem"; id: string }
   | { type: "clearChecked" }
   | { type: "reorderItems"; orderedIds: string[] }

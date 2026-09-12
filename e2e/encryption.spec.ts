@@ -11,15 +11,17 @@ test("toute liste créée est chiffrée côté serveur, sans rien changer à l'u
   await expect(page.locator(".lock-badge")).toBeVisible();
   await expect(page.locator(".list-privacy-note")).toContainText("chiffrées");
 
-  // Utilisation normale : ajouter, cocher fonctionnent malgré le chiffrement
-  // côté serveur (chaque persist() chiffre avant écriture).
+  // Utilisation normale : ajouter, changer le statut fonctionnent malgré le
+  // chiffrement côté serveur (chaque persist() chiffre avant écriture).
   await page.fill("#add-input", "Lego");
   await page.click(".add-submit");
   await page.fill("#add-input", "Écharpe");
   await page.click(".add-submit");
   await expect(page.locator(".item")).toHaveCount(2);
 
-  await page.locator(".item", { has: page.locator(".item-name", { hasText: "Écharpe" }) }).locator(".item-check").check();
+  const echarpe = page.locator(".item", { has: page.locator(".item-name", { hasText: "Écharpe" }) });
+  await echarpe.locator(".item-status").click();
+  await page.locator(".status-picker .status-pill", { hasText: "Emballé" }).click();
   await expect(page.locator(".item.checked .item-name", { hasText: "Écharpe" })).toBeVisible();
 
   // Persiste après rechargement (aller-retour serveur, pas juste local) :

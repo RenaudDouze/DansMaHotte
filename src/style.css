@@ -591,13 +591,6 @@ button:focus-visible {
   color: var(--text-muted);
 }
 
-.item-check {
-  width: 1.2em;
-  height: 1.2em;
-  accent-color: var(--primary);
-  flex-shrink: 0;
-}
-
 .qty-badge {
   flex-shrink: 0;
   background: var(--primary);
@@ -753,12 +746,23 @@ button:focus-visible {
   box-shadow: var(--shadow);
 }
 
+.link-editor-view {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .link-editor-open {
   display: flex;
   align-items: center;
   gap: 0.35rem;
+  flex: 1;
+  min-width: 0;
   font-size: 0.8rem;
   color: var(--primary);
+}
+
+.link-editor-open span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

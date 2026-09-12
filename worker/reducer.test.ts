@@ -175,6 +175,21 @@ describe("applyMessage", () => {
       expect(state.items[0].status).toBe("commande");
     });
 
+    // Pas de case à cocher séparée dans une liste de cadeaux : "checked"
+    // suit automatiquement le statut "Emballé" (voir shared/types.ts).
+    it("passe checked à true quand le statut devient emballe", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", status: "emballe" }, NOW);
+      expect(state.items[0].checked).toBe(true);
+    });
+
+    it("repasse checked à false quand le statut n'est plus emballe", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", status: "emballe" }, NOW);
+      applyMessage(state, { type: "updateItem", id: "i1", status: "recu" }, NOW);
+      expect(state.items[0].checked).toBe(false);
+    });
+
     it("met à jour le lien quand il est fourni, en le normalisant", () => {
       const state = withItem();
       applyMessage(state, { type: "updateItem", id: "i1", link: "exemple.fr/lego" }, NOW);
@@ -205,39 +220,6 @@ describe("applyMessage", () => {
       const state = withItem();
       applyMessage(state, { type: "updateItem", id: "i1", recipientId: "ghost" }, NOW);
       expect(state.items[0].recipientId).toBeNull();
-    });
-  });
-
-  describe("toggleItem", () => {
-    it("coche et décoche un cadeau", () => {
-      const state = makeState({
-        items: [
-          {
-            id: "i1",
-            name: "Lego",
-            quantity: "",
-            recipientId: null,
-            checked: false,
-            order: 0,
-            createdAt: 0,
-            updatedAt: 0,
-            hasImage: false,
-            imageVersion: 0,
-          },
-        ],
-      });
-      applyMessage(state, { type: "toggleItem", id: "i1", checked: true }, NOW);
-      expect(state.items[0].checked).toBe(true);
-      expect(state.items[0].updatedAt).toBe(NOW);
-
-      applyMessage(state, { type: "toggleItem", id: "i1", checked: false }, NOW + 1);
-      expect(state.items[0].checked).toBe(false);
-    });
-
-    it("ignore un id inconnu", () => {
-      const state = makeState();
-      applyMessage(state, { type: "toggleItem", id: "nope", checked: true }, NOW);
-      expect(state.items).toEqual([]);
     });
   });
 
