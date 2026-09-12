@@ -54,7 +54,7 @@ jobs:
         # recharger un lien partagé donnerait un 404 au lieu de servir l'app,
         # qui route elle-même via location.pathname une fois chargée.
         run: cp dist/client/index.html dist/client/404.html
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist/client
