@@ -2,11 +2,13 @@ import "./style.css";
 import { mountHomeView } from "./views/home";
 import { mountListView } from "./views/list";
 import { applyTheme, getThemePreference } from "./lib/theme";
+import { applyAccessibilityPreference, getAccessibilityPreference } from "./lib/accessibilityPreference";
 import { appPath, routePath } from "./lib/basePath";
 
 // Appliqué avant le premier rendu pour éviter un flash de thème clair suivi
 // d'un bascule sombre si l'utilisateur a choisi un thème manuel.
 applyTheme(getThemePreference());
+applyAccessibilityPreference(getAccessibilityPreference());
 
 const app = document.getElementById("app")!;
 let cleanup: (() => void) | null = null;

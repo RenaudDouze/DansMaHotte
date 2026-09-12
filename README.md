@@ -43,7 +43,8 @@ de données externe).
 - **Couleur automatique par personne** et icônes cohérentes (pas d'emoji
   dépendants de la plateforme) pour une interface plus lisible.
 - **Accessibilité** : focus piégé et restauré dans les modales, navigation
-  clavier.
+  clavier, et un mode dédié (bouton dans le menu ⋮ et sur l'accueil) pour
+  agrandir le texte, renforcer le contraste, ou réduire les animations.
 - **Chiffrement au repos** : les données de chaque liste sont chiffrées sur
   le serveur (voir [Confidentialité](#confidentialité)).
 

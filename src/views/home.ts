@@ -4,6 +4,7 @@ import { escapeHtml } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
 import { privacyHint } from "../lib/privacyHint";
+import { openAccessibilityModal } from "../components/accessibilityModal";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
 
@@ -30,9 +31,14 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
     const theme = getThemePreference();
     root.innerHTML = `
       <div class="home">
-        <button type="button" class="icon-btn theme-toggle" id="theme-toggle" aria-label="Thème : ${themeLabel(theme)}" title="Thème : ${themeLabel(theme)}">
-          ${THEME_ICON[theme]}
-        </button>
+        <div class="home-toolbar">
+          <button type="button" class="icon-btn" id="btn-accessibility" aria-label="Accessibilité" title="Accessibilité">
+            ${icons.accessibility}
+          </button>
+          <button type="button" class="icon-btn" id="theme-toggle" aria-label="Thème : ${themeLabel(theme)}" title="Thème : ${themeLabel(theme)}">
+            ${THEME_ICON[theme]}
+          </button>
+        </div>
         <header class="home-header">
           <div class="logo">${icons.gift}</div>
           <h1>DansMaHotte</h1>
@@ -84,6 +90,8 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
       cycleThemePreference();
       render();
     });
+
+    root.querySelector("#btn-accessibility")?.addEventListener("click", openAccessibilityModal);
 
     root.querySelector("#create-form")?.addEventListener("submit", async (e) => {
       e.preventDefault();

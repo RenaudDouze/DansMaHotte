@@ -52,6 +52,9 @@ export const icons = {
   download: svg('<path d="M12 3v13"/><path d="m7 11 5 5 5-5"/><path d="M4 21h16"/>'),
   upload: svg('<path d="M12 20V7"/><path d="m7 12 5-5 5 5"/><path d="M4 21h16"/>'),
   lock: svg('<rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'),
+  accessibility: svg(
+    '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="7.5" r="1.3" fill="currentColor" stroke="none"/><path d="M8 11h8M12 11v4l-2.5 4M12 15l2.5 4"/>',
+  ),
 } as const;
 
 export type IconName = keyof typeof icons;
