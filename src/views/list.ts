@@ -125,7 +125,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   let shellMounted = false;
   let searchQuery = "";
   // null = pas encore évalué (évite de célébrer à l'ouverture d'une liste
-  // déjà entièrement cochée) ; sinon, reflète l'état à la dernière vérification.
+  // déjà entièrement emballée) ; sinon, reflète l'état à la dernière vérification.
   let wasFullyChecked: boolean | null = null;
   const conn = new ListConnection(code, getDeviceName());
 
@@ -414,7 +414,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           const checkedItems = state?.items.filter((i) => i.checked) ?? [];
           if (checkedItems.length === 0) return;
           conn.send({ type: "clearChecked" });
-          pushUndo(`${checkedItems.length} cadeau(x) coché(s) vidé(s)`, () => conn.send({ type: "restoreItems", items: checkedItems }));
+          pushUndo(`${checkedItems.length} cadeau(x) emballé(s) vidé(s)`, () => conn.send({ type: "restoreItems", items: checkedItems }));
           if (panel) panel.hidden = true;
         },
       });
@@ -658,10 +658,11 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         e.stopPropagation();
         const status = pill.dataset.status as GiftStatus;
         // Mise à jour optimiste : sans elle, le badge n'apparaît qu'après
-        // l'aller-retour serveur (contrairement à la case à cocher, qui a
-        // un retour visuel natif immédiat). L'état reçu en confirmation
-        // écrasera de toute façon cette valeur locale (voir onStateUpdate).
+        // l'aller-retour serveur. L'état reçu en confirmation écrasera de
+        // toute façon cette valeur locale (voir onStateUpdate).
         item.status = status;
+        item.checked = status === "emballe";
+        if (item.checked) navigator.vibrate?.(10);
         closeStatusPicker();
         renderRecipients();
         conn.send({ type: "updateItem", id: item.id, status });
@@ -708,36 +709,64 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     const panel = document.createElement("div");
     panel.className = "link-editor";
     panel.setAttribute("role", "dialog");
-    panel.innerHTML = `
-      ${item.link ? `<a class="link-editor-open" href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer">${icons.link} ${escapeHtml(item.link)}</a>` : ""}
-      <form class="link-editor-form" novalidate>
-        <input type="text" inputmode="url" class="link-editor-input" placeholder="https://..." value="${escapeHtml(item.link ?? "")}" />
-        <button type="submit" class="btn primary">Enregistrer</button>
-      </form>
-      ${item.link ? `<button type="button" class="link-editor-remove">Supprimer le lien</button>` : ""}
-    `;
     document.body.appendChild(panel);
-
-    const rect = anchor.getBoundingClientRect();
-    panel.style.top = `${rect.bottom + 4}px`;
-    panel.style.left = `${rect.left}px`;
-    const overflowX = panel.getBoundingClientRect().right - window.innerWidth + 8;
-    if (overflowX > 0) panel.style.left = `${Math.max(8, rect.left - overflowX)}px`;
     anchor.setAttribute("aria-expanded", "true");
 
-    const input = panel.querySelector<HTMLInputElement>(".link-editor-input")!;
-    input.focus();
+    function position(): void {
+      const rect = anchor.getBoundingClientRect();
+      panel.style.top = `${rect.bottom + 4}px`;
+      panel.style.left = `${rect.left}px`;
+      const overflowX = panel.getBoundingClientRect().right - window.innerWidth + 8;
+      if (overflowX > 0) panel.style.left = `${Math.max(8, rect.left - overflowX)}px`;
+    }
 
-    panel.querySelector(".link-editor-form")!.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const link = input.value.trim();
-      conn.send({ type: "updateItem", id: item.id, link });
-      closeLinkEditor();
-    });
-    panel.querySelector(".link-editor-remove")?.addEventListener("click", () => {
-      conn.send({ type: "updateItem", id: item.id, link: "" });
-      closeLinkEditor();
-    });
+    // Un lien déjà présent s'affiche d'abord en lecture seule (avec un
+    // raccourci pour l'ouvrir) plutôt que directement dans un champ éditable
+    // — l'édition ne s'ouvre qu'au clic sur l'icône crayon, pour ne pas
+    // donner l'impression qu'un clic dans le texte va le modifier.
+    function renderView(): void {
+      panel.innerHTML = `
+        <div class="link-editor-view">
+          <a class="link-editor-open" href="${escapeHtml(item.link!)}" target="_blank" rel="noopener noreferrer">${icons.link}<span>${escapeHtml(item.link!)}</span></a>
+          <button type="button" class="icon-btn link-editor-edit" aria-label="Modifier le lien">${icons.edit}</button>
+        </div>
+      `;
+      position();
+      panel.querySelector(".link-editor-edit")!.addEventListener("click", (e) => {
+        // stopPropagation avant de remplacer le innerHTML du panel : sinon
+        // ce même clic (dont la cible vient d'être détachée du DOM) atteint
+        // le listener document → onDocClick le prend pour un clic extérieur
+        // et referme aussitôt le popover qu'on vient d'ouvrir en mode édition.
+        e.stopPropagation();
+        renderForm();
+      });
+    }
+
+    function renderForm(): void {
+      panel.innerHTML = `
+        <form class="link-editor-form" novalidate>
+          <input type="text" inputmode="url" class="link-editor-input" placeholder="https://..." value="${escapeHtml(item.link ?? "")}" />
+          <button type="submit" class="btn primary">Enregistrer</button>
+        </form>
+        ${item.link ? `<button type="button" class="link-editor-remove">Supprimer le lien</button>` : ""}
+      `;
+      position();
+      const input = panel.querySelector<HTMLInputElement>(".link-editor-input")!;
+      input.focus();
+      panel.querySelector(".link-editor-form")!.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const link = input.value.trim();
+        conn.send({ type: "updateItem", id: item.id, link });
+        closeLinkEditor();
+      });
+      panel.querySelector(".link-editor-remove")?.addEventListener("click", () => {
+        conn.send({ type: "updateItem", id: item.id, link: "" });
+        closeLinkEditor();
+      });
+    }
+
+    if (item.link) renderView();
+    else renderForm();
 
     function onDocClick(e: MouseEvent): void {
       if (!panel.contains(e.target as Node)) closeLinkEditor();
@@ -799,13 +828,13 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
     // Une personne reste affichée même sans aucun cadeau (pour ne pas
     // l'oublier, et pour pouvoir lui glisser-déposer un premier cadeau) —
-    // sauf pendant une recherche ou avec "masquer les cadeaux cochés", où
+    // sauf pendant une recherche ou avec "masquer les cadeaux emballés", où
     // une section vide n'a rien d'utile à montrer. Le pseudo-groupe "Sans
     // destinataire"/"Cadeaux" (id null), lui, ne s'affiche que s'il a
     // effectivement quelque chose dedans.
     groups = groups.filter((g) => g.items.length > 0 || (g.id !== null && !query && !hasAnyGift(g.id)));
 
-    // Une personne dont tous les cadeaux sont cochés passe après celles
+    // Une personne dont tous les cadeaux sont emballés passe après celles
     // encore en cours, même logique que pour les cadeaux au sein d'une
     // personne (voir sortItems ci-dessus). Tri stable : ne touche pas à
     // l'ordre relatif au sein de chaque groupe (complet / non complet).
@@ -820,7 +849,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     }
 
     if (groups.length === 0 && hideChecked && state.items.length > 0) {
-      container.innerHTML = `<div class="empty-state">Tous les cadeaux sont cochés (et masqués).</div>`;
+      container.innerHTML = `<div class="empty-state">Tous les cadeaux sont emballés (et masqués).</div>`;
       disposeItemDnd?.();
       disposeRecipientDnd?.();
       disposeSwipe?.();
@@ -856,13 +885,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       </section>`,
       )
       .join("");
-
-    container.querySelectorAll<HTMLInputElement>(".item-check").forEach((cb) => {
-      cb.addEventListener("change", () => {
-        conn.send({ type: "toggleItem", id: cb.dataset.id!, checked: cb.checked });
-        if (cb.checked) navigator.vibrate?.(10);
-      });
-    });
 
     container.querySelectorAll<HTMLButtonElement>(".item-status").forEach((btn) => {
       btn.addEventListener("click", (e) => {
@@ -982,7 +1004,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     disposeSwipe = enableSwipeToDelete(container, {
       itemSelector: ".item",
       contentSelector: ".item-content",
-      ignoreSelector: ".item-drag-handle, .item-check, .item-status, .item-delete, .item-photo, .item-link",
+      ignoreSelector: ".item-drag-handle, .item-status, .item-delete, .item-photo, .item-link",
       onDelete: (el) => {
         const item = state!.items.find((i) => i.id === el.dataset.id);
         if (!item) return;
@@ -1065,7 +1087,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         <div class="item-swipe-bg" aria-hidden="true">${icons.trash}</div>
         <div class="item-content">
           <button class="drag-handle item-drag-handle" aria-label="Déplacer">${icons.gripVertical}</button>
-          <input type="checkbox" class="item-check" data-id="${item.id}" ${item.checked ? "checked" : ""} />
           <button type="button" class="item-status" data-id="${item.id}" aria-haspopup="true" aria-expanded="false" aria-label="Statut : ${GIFT_STATUS_LABELS[status]} (cliquer pour changer)">${GIFT_STATUS_LABELS[status]}</button>
           <span class="qty-badge ${item.quantity ? "" : "qty-empty"}" data-id="${item.id}">${escapeHtml(item.quantity) || "+"}</span>
           <span class="item-name" data-id="${item.id}">${escapeHtml(item.name)}</span>
@@ -1107,7 +1128,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
             <button type="button" data-action="theme">${themeMenuHtml(getThemePreference())}</button>
             <button type="button" data-action="item-sort">${itemSortMenuHtml(getItemSortPreference())}</button>
             <button type="button" data-action="manage-recipients"><span class="menu-item-icon">${icons.user}</span>Gérer les personnes</button>
-            <button type="button" data-action="clear-checked"><span class="menu-item-icon">${icons.checkCircle}</span><span class="menu-item-label">Vider les cadeaux cochés</span></button>
+            <button type="button" data-action="clear-checked"><span class="menu-item-icon">${icons.checkCircle}</span><span class="menu-item-label">Vider les cadeaux emballés</span></button>
           </div>
         </header>
 
@@ -1154,12 +1175,12 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function hideCheckedButtonHtml(hide: boolean): string {
-    return `<button class="icon-btn" id="btn-hide-checked" aria-label="${hide ? "Afficher les cadeaux cochés" : "Masquer les cadeaux cochés"}" aria-pressed="${hide}">${hide ? icons.eyeOff : icons.eye}</button>`;
+    return `<button class="icon-btn" id="btn-hide-checked" aria-label="${hide ? "Afficher les cadeaux emballés" : "Masquer les cadeaux emballés"}" aria-pressed="${hide}">${hide ? icons.eyeOff : icons.eye}</button>`;
   }
 
   function updateHideCheckedButton(button: HTMLElement): void {
     const hide = getHideCheckedPreference();
-    button.setAttribute("aria-label", hide ? "Afficher les cadeaux cochés" : "Masquer les cadeaux cochés");
+    button.setAttribute("aria-label", hide ? "Afficher les cadeaux emballés" : "Masquer les cadeaux emballés");
     button.setAttribute("aria-pressed", String(hide));
     button.innerHTML = hide ? icons.eyeOff : icons.eye;
   }

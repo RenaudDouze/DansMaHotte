@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("parcours complet : créer, ajouter avec quantité, assigner une personne, cocher, partager, exporter/importer", async ({ page }) => {
+test("parcours complet : créer, ajouter avec quantité, assigner une personne, changer le statut, partager, exporter/importer", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".home-header h1")).toHaveText("DansMaHotte");
 
@@ -35,8 +35,10 @@ test("parcours complet : créer, ajouter avec quantité, assigner une personne, 
   const marieSection = page.locator(".recipient-section", { has: page.locator(".person-name", { hasText: "Marie" }) });
   await expect(marieSection.locator(".item-name")).toHaveText(["Écharpe"]);
 
-  // Cocher un cadeau le fait basculer visuellement
-  await page.locator(".item", { has: page.locator(".item-name", { hasText: "Livre" }) }).locator(".item-check").check();
+  // Passer un cadeau au statut "Emballé" le fait basculer visuellement
+  const livre = page.locator(".item", { has: page.locator(".item-name", { hasText: "Livre" }) });
+  await livre.locator(".item-status").click();
+  await page.locator(".status-picker .status-pill", { hasText: "Emballé" }).click();
   await expect(page.locator(".item.checked .item-name", { hasText: "Livre" })).toBeVisible();
 
   // Partage : code affiché + QR code généré, export/import accessibles
