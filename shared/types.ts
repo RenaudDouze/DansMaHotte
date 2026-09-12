@@ -36,6 +36,9 @@ export interface Item {
   id: string;
   name: string;
   recipientId: string | null;
+  /** Dérivé du statut plutôt que coché indépendamment (pas de case à cocher
+   * dans une liste de cadeaux) : toujours `status === "emballe"`, maintenu
+   * par worker/reducer.ts à chaque changement de statut. */
   checked: boolean;
   order: number;
   /** Optional for backward compatibility with items created before this
@@ -86,7 +89,6 @@ export type ClientMessage =
       // null efface le prix ; undefined = champ non fourni, ne touche à rien.
       price?: number | null;
     }
-  | { type: "toggleItem"; id: string; checked: boolean }
   | { type: "deleteItem"; id: string }
   | { type: "clearChecked" }
   | { type: "reorderItems"; orderedIds: string[] }

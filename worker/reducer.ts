@@ -74,7 +74,13 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       if (!item) return;
       if (msg.name !== undefined) item.name = msg.name;
       if (msg.recipientId !== undefined) item.recipientId = validRecipientId(state, msg.recipientId);
-      if (msg.status !== undefined) item.status = msg.status;
+      if (msg.status !== undefined) {
+        item.status = msg.status;
+        // Pas de case à cocher séparée dans une liste de cadeaux : "Emballé"
+        // est le statut qui en tient lieu (tri, "vider/masquer les cadeaux
+        // emballés", célébration...) — voir shared/types.ts.
+        item.checked = msg.status === "emballe";
+      }
       if (msg.link !== undefined) item.link = normalizeLink(msg.link);
       if (msg.price !== undefined) {
         if (msg.price === null) {
@@ -84,14 +90,6 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
           if (normalized !== undefined) item.price = normalized;
         }
       }
-      item.updatedAt = now;
-      return;
-    }
-
-    case "toggleItem": {
-      const item = state.items.find((i) => i.id === msg.id);
-      if (!item) return;
-      item.checked = msg.checked;
       item.updatedAt = now;
       return;
     }

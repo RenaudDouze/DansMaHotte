@@ -1,6 +1,16 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+
+// Pas de case à cocher dans une liste de cadeaux : le statut "Emballé" en
+// tient lieu (voir worker/reducer.ts, qui dérive `checked` du statut). Ce
+// helper choisit un statut sur un cadeau donné, comme le ferait un clic
+// utilisateur sur son badge puis sur une pastille du menu.
+async function setStatus(item: Locator, label: string): Promise<void> {
+  await item.locator(".item-status").click();
+  await item.page().locator(".status-picker .status-pill", { hasText: label }).click();
+}
+const markAsWrapped = (item: Locator) => setStatus(item, "Emballé");
 
 // Une image PNG 1x1 minimale, utilisée par le test de photo ci-dessous.
 test.beforeAll(() => {
@@ -72,7 +82,7 @@ test("la recherche filtre les cadeaux et se referme proprement", async ({ page }
   await expect(page.locator("#search-bar")).toBeHidden();
 });
 
-test("cocher le dernier cadeau déclenche une célébration, mais pas au rechargement d'une liste déjà terminée", async ({ page }) => {
+test("emballer le dernier cadeau déclenche une célébration, mais pas au rechargement d'une liste déjà terminée", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");
   await page.waitForURL(/\/l\//);
@@ -82,7 +92,7 @@ test("cocher le dernier cadeau déclenche une célébration, mais pas au recharg
   await page.click(".add-submit");
   await expect(page.locator(".item")).toHaveCount(1);
 
-  await page.locator(".item-check").check();
+  await markAsWrapped(page.locator(".item"));
   await expect(page.locator(".celebration-toast")).toBeVisible();
 
   await page.reload();
@@ -254,7 +264,7 @@ test("on peut réordonner les personnes par glisser-déposer dans le gestionnair
   await expect(page.locator(".person-name")).toHaveText(["Abel", "Zoé"]);
 });
 
-test("une personne dont tous les cadeaux sont cochés passe après les autres", async ({ page }) => {
+test("une personne dont tous les cadeaux sont emballés passe après les autres", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");
   await page.waitForURL(/\/l\//);
@@ -278,14 +288,27 @@ test("une personne dont tous les cadeaux sont cochés passe après les autres", 
   await page.click(".add-submit");
 
   await expect(page.locator(".person-name")).toHaveText(["Marie", "Paul"]);
+  // Attend que les deux ajouts soient bien confirmés par le serveur avant
+  // d'ouvrir un popover : sinon un état encore en vol peut arriver pendant
+  // l'interaction et refermer le popover fraîchement ouvert sous nos pieds.
+  await expect(page.locator(".item")).toHaveCount(2);
 
-  // Cocher le seul cadeau de "Marie" la fait passer après "Paul", encore
+  // Emballer le seul cadeau de "Marie" la fait passer après "Paul", encore
   // incomplet.
-  await page.locator(".item", { has: page.locator(".item-name", { hasText: "Écharpe" }) }).locator(".item-check").check();
+  const echarpe = page.locator(".item", { has: page.locator(".item-name", { hasText: "Écharpe" }) });
+  await markAsWrapped(echarpe);
   await expect(page.locator(".person-name")).toHaveText(["Paul", "Marie"]);
 
-  // La décocher restaure l'ordre d'origine.
-  await page.locator(".item", { has: page.locator(".item-name", { hasText: "Écharpe" }) }).locator(".item-check").uncheck();
+  // Recharger confirme que l'écho serveur du changement précédent est bien
+  // arrivé, avant de rouvrir un popover sur ce même cadeau (sinon cet écho
+  // encore en vol peut arriver pendant l'interaction et refermer le popover
+  // fraîchement ouvert sous nos pieds) — et vérifie au passage la persistance.
+  await page.reload();
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+  await expect(page.locator(".person-name")).toHaveText(["Paul", "Marie"]);
+
+  // Changer à nouveau son statut restaure l'ordre d'origine.
+  await setStatus(page.locator(".item", { has: page.locator(".item-name", { hasText: "Écharpe" }) }), "Idée");
   await expect(page.locator(".person-name")).toHaveText(["Marie", "Paul"]);
 });
 
@@ -422,10 +445,15 @@ test("on peut ajouter, modifier et retirer le lien d'un cadeau", async ({ page }
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
   await expect(page.locator(".item-link")).toHaveClass(/item-link-set/);
 
-  // Rouvrir affiche le lien courant, avec un raccourci pour l'ouvrir.
+  // Rouvrir affiche d'abord le lien en lecture seule (avec un raccourci pour
+  // l'ouvrir), pas directement le champ d'édition.
   await page.locator(".item-link").click();
   const reopened = page.locator(".link-editor");
   await expect(reopened.locator(".link-editor-open")).toHaveAttribute("href", "https://exemple.fr/lego");
+  await expect(reopened.locator(".link-editor-input")).toHaveCount(0);
+
+  // L'icône crayon bascule vers le champ d'édition, pré-rempli.
+  await reopened.locator(".link-editor-edit").click();
   await expect(reopened.locator(".link-editor-input")).toHaveValue("https://exemple.fr/lego");
 
   // Le retirer repasse le bouton en état "vide".
@@ -590,7 +618,7 @@ test("on peut choisir manuellement la couleur d'une personne, puis revenir à l'
   await expect(row.locator(".recipient-row")).toHaveCSS("--person-hue", autoHue);
 });
 
-test("« Vider les cadeaux cochés » demande aussi un second clic au même endroit", async ({ page }) => {
+test("« Vider les cadeaux emballés » demande aussi un second clic au même endroit", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");
   await page.waitForURL(/\/l\//);
@@ -598,7 +626,7 @@ test("« Vider les cadeaux cochés » demande aussi un second clic au même endr
 
   await page.fill("#add-input", "Lego");
   await page.click(".add-submit");
-  await page.locator(".item-check").check();
+  await markAsWrapped(page.locator(".item"));
 
   const clearBtn = page.locator('[data-action="clear-checked"]');
 
@@ -612,7 +640,7 @@ test("« Vider les cadeaux cochés » demande aussi un second clic au même endr
   await clearBtn.click();
   await expect(page.locator(".item")).toHaveCount(0);
   await expect(page.locator("#menu-panel")).toBeHidden();
-  await expect(page.locator("#undo-toast")).toContainText("1 cadeau(x) coché(s) vidé(s)");
+  await expect(page.locator("#undo-toast")).toContainText("1 cadeau(x) emballé(s) vidé(s)");
 
   await page.click("#undo-toast button");
   await expect(page.locator(".item .item-name")).toHaveText("Lego");
@@ -648,7 +676,7 @@ test("le tri alphabétique des cadeaux est optionnel et persiste après un recha
   await expect(page.locator('[data-action="item-sort"]')).toHaveText("Tri des cadeaux : Alphabétique");
 });
 
-test("masquer les cadeaux cochés est optionnel et persiste après un rechargement", async ({ page }) => {
+test("masquer les cadeaux emballés est optionnel et persiste après un rechargement", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");
   await page.waitForURL(/\/l\//);
@@ -658,7 +686,7 @@ test("masquer les cadeaux cochés est optionnel et persiste après un rechargeme
     await page.fill("#add-input", name);
     await page.click(".add-submit");
   }
-  await page.locator(".item", { has: page.locator(".item-name", { hasText: "Livre" }) }).locator(".item-check").check();
+  await markAsWrapped(page.locator(".item", { has: page.locator(".item-name", { hasText: "Livre" }) }));
   await expect(page.locator(".item-name")).toHaveText(["Lego", "Livre"]);
 
   const hideBtn = page.locator("#btn-hide-checked");
@@ -674,10 +702,10 @@ test("masquer les cadeaux cochés est optionnel et persiste après un rechargeme
   await expect(page.locator(".item-name")).toHaveText(["Lego"]);
   await expect(page.locator("#btn-hide-checked")).toHaveAttribute("aria-pressed", "true");
 
-  // Cocher le dernier cadeau visible le fait disparaître aussitôt, avec un
+  // Emballer le dernier cadeau visible le fait disparaître aussitôt, avec un
   // message dédié plutôt que le message générique de liste vide.
-  await page.locator(".item", { has: page.locator(".item-name", { hasText: "Lego" }) }).locator(".item-check").check();
-  await expect(page.locator(".empty-state")).toHaveText("Tous les cadeaux sont cochés (et masqués).");
+  await markAsWrapped(page.locator(".item", { has: page.locator(".item-name", { hasText: "Lego" }) }));
+  await expect(page.locator(".empty-state")).toHaveText("Tous les cadeaux sont emballés (et masqués).");
 
   await page.locator("#btn-hide-checked").click();
   await expect(page.locator("#btn-hide-checked")).toHaveAttribute("aria-pressed", "false");
