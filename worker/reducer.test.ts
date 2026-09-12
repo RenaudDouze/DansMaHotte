@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyMessage, nextOrder, validRecipientId, normalizeLink } from "./reducer";
+import { applyMessage, nextOrder, validRecipientId, normalizeLink, normalizePrice } from "./reducer";
 import type { ListState } from "../shared/types";
 
 function makeState(overrides: Partial<ListState> = {}): ListState {
@@ -61,6 +61,24 @@ describe("normalizeLink", () => {
   });
 });
 
+describe("normalizePrice", () => {
+  it("arrondit au centime", () => {
+    expect(normalizePrice(19.999)).toBe(20);
+    expect(normalizePrice(19.994)).toBe(19.99);
+  });
+
+  it("accepte 0", () => {
+    expect(normalizePrice(0)).toBe(0);
+  });
+
+  it("rejette les valeurs négatives, NaN ou infinies", () => {
+    expect(normalizePrice(-1)).toBeUndefined();
+    expect(normalizePrice(Number.NaN)).toBeUndefined();
+    expect(normalizePrice(Number.POSITIVE_INFINITY)).toBeUndefined();
+    expect(normalizePrice(Number.NEGATIVE_INFINITY)).toBeUndefined();
+  });
+});
+
 describe("applyMessage", () => {
   it("sync ne modifie rien", () => {
     const state = makeState();
@@ -83,14 +101,13 @@ describe("applyMessage", () => {
   });
 
   describe("addItem", () => {
-    it("ajoute un cadeau avec quantité extraite, sans image", () => {
+    it("ajoute un cadeau, sans image", () => {
       const state = makeState({ recipients: [{ id: "r1", name: "Marie", order: 0 }] });
-      applyMessage(state, { type: "addItem", id: "i1", rawText: "2x Lego", recipientId: "r1" }, NOW);
+      applyMessage(state, { type: "addItem", id: "i1", rawText: "  Lego  ", recipientId: "r1" }, NOW);
       expect(state.items).toEqual([
         {
           id: "i1",
           name: "Lego",
-          quantity: "x2",
           recipientId: "r1",
           checked: false,
           order: 0,
@@ -116,9 +133,9 @@ describe("applyMessage", () => {
       expect(state.items.map((i) => i.order)).toEqual([0, 1]);
     });
 
-    it("n'ajoute rien si le texte ne produit aucun nom (ex: quantité seule)", () => {
+    it("n'ajoute rien si le texte est vide ou blanc", () => {
       const state = makeState();
-      applyMessage(state, { type: "addItem", id: "i1", rawText: "3 kg", recipientId: null }, NOW);
+      applyMessage(state, { type: "addItem", id: "i1", rawText: "   ", recipientId: null }, NOW);
       expect(state.items).toEqual([]);
     });
   });
@@ -130,7 +147,6 @@ describe("applyMessage", () => {
           {
             id: "i1",
             name: "Lego",
-            quantity: "1",
             recipientId: null,
             checked: false,
             order: 0,
@@ -145,21 +161,14 @@ describe("applyMessage", () => {
 
     it("met à jour uniquement les champs fournis", () => {
       const state = withItem();
-      applyMessage(state, { type: "updateItem", id: "i1", quantity: "2" }, NOW);
-      expect(state.items[0]).toMatchObject({ name: "Lego", quantity: "2", recipientId: null, updatedAt: NOW });
+      applyMessage(state, { type: "updateItem", id: "i1", recipientId: null }, NOW);
+      expect(state.items[0]).toMatchObject({ name: "Lego", recipientId: null, updatedAt: NOW });
     });
 
     it("met à jour le nom quand il est fourni", () => {
       const state = withItem();
       applyMessage(state, { type: "updateItem", id: "i1", name: "Lego Star Wars" }, NOW);
       expect(state.items[0].name).toBe("Lego Star Wars");
-    });
-
-    it("permet de vider quantity/recipientId explicitement", () => {
-      const state = withItem();
-      applyMessage(state, { type: "updateItem", id: "i1", quantity: "", recipientId: null }, NOW);
-      expect(state.items[0].quantity).toBe("");
-      expect(state.items[0].recipientId).toBeNull();
     });
 
     it("met à jour le statut quand il est fourni", () => {
@@ -171,7 +180,7 @@ describe("applyMessage", () => {
     it("ne touche pas le statut quand il n'est pas fourni", () => {
       const state = withItem();
       applyMessage(state, { type: "updateItem", id: "i1", status: "commande" }, NOW);
-      applyMessage(state, { type: "updateItem", id: "i1", quantity: "3" }, NOW);
+      applyMessage(state, { type: "updateItem", id: "i1", name: "Lego 2" }, NOW);
       expect(state.items[0].status).toBe("commande");
     });
 
@@ -206,8 +215,39 @@ describe("applyMessage", () => {
     it("ne touche pas le lien quand il n'est pas fourni", () => {
       const state = withItem();
       applyMessage(state, { type: "updateItem", id: "i1", link: "https://exemple.fr" }, NOW);
-      applyMessage(state, { type: "updateItem", id: "i1", quantity: "3" }, NOW);
+      applyMessage(state, { type: "updateItem", id: "i1", name: "Lego 2" }, NOW);
       expect(state.items[0].link).toBe("https://exemple.fr");
+    });
+
+    it("met à jour le prix quand il est fourni, en le normalisant", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", price: 19.999 }, NOW);
+      expect(state.items[0].price).toBe(20);
+    });
+
+    it("permet d'effacer le prix explicitement avec null", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", price: 19.9 }, NOW);
+      applyMessage(state, { type: "updateItem", id: "i1", price: null }, NOW);
+      expect(state.items[0].price).toBeUndefined();
+    });
+
+    it("ignore un prix invalide (négatif, NaN, infini) plutôt que de le stocker", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", price: 10 }, NOW);
+      applyMessage(state, { type: "updateItem", id: "i1", price: -5 }, NOW);
+      expect(state.items[0].price).toBe(10);
+      applyMessage(state, { type: "updateItem", id: "i1", price: Number.NaN }, NOW);
+      expect(state.items[0].price).toBe(10);
+      applyMessage(state, { type: "updateItem", id: "i1", price: Number.POSITIVE_INFINITY }, NOW);
+      expect(state.items[0].price).toBe(10);
+    });
+
+    it("ne touche pas le prix quand il n'est pas fourni", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", price: 19.9 }, NOW);
+      applyMessage(state, { type: "updateItem", id: "i1", name: "Lego 2" }, NOW);
+      expect(state.items[0].price).toBe(19.9);
     });
 
     it("ignore un id inconnu", () => {
@@ -227,8 +267,8 @@ describe("applyMessage", () => {
     it("deleteItem retire uniquement le cadeau visé", () => {
       const state = makeState({
         items: [
-          { id: "i1", name: "A", quantity: "", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
-          { id: "i2", name: "B", quantity: "", recipientId: null, checked: false, order: 1, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
+          { id: "i1", name: "A", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
+          { id: "i2", name: "B", recipientId: null, checked: false, order: 1, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
         ],
       });
       applyMessage(state, { type: "deleteItem", id: "i1" }, NOW);
@@ -238,9 +278,9 @@ describe("applyMessage", () => {
     it("clearChecked retire tous les cadeaux cochés", () => {
       const state = makeState({
         items: [
-          { id: "i1", name: "A", quantity: "", recipientId: null, checked: true, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
-          { id: "i2", name: "B", quantity: "", recipientId: null, checked: false, order: 1, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
-          { id: "i3", name: "C", quantity: "", recipientId: null, checked: true, order: 2, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
+          { id: "i1", name: "A", recipientId: null, checked: true, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
+          { id: "i2", name: "B", recipientId: null, checked: false, order: 1, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
+          { id: "i3", name: "C", recipientId: null, checked: true, order: 2, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
         ],
       });
       applyMessage(state, { type: "clearChecked" }, NOW);
@@ -252,8 +292,8 @@ describe("applyMessage", () => {
     it("réassigne order selon la position dans orderedIds", () => {
       const state = makeState({
         items: [
-          { id: "i1", name: "A", quantity: "", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
-          { id: "i2", name: "B", quantity: "", recipientId: null, checked: false, order: 1, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
+          { id: "i1", name: "A", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
+          { id: "i2", name: "B", recipientId: null, checked: false, order: 1, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
         ],
       });
       applyMessage(state, { type: "reorderItems", orderedIds: ["i2", "i1"] }, NOW);
@@ -263,7 +303,7 @@ describe("applyMessage", () => {
 
     it("laisse inchangé un cadeau absent de orderedIds", () => {
       const state = makeState({
-        items: [{ id: "i1", name: "A", quantity: "", recipientId: null, checked: false, order: 7, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 }],
+        items: [{ id: "i1", name: "A", recipientId: null, checked: false, order: 7, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 }],
       });
       applyMessage(state, { type: "reorderItems", orderedIds: [] }, NOW);
       expect(state.items[0].order).toBe(7);
@@ -277,7 +317,6 @@ describe("applyMessage", () => {
           {
             id: "i1",
             name: "Lego",
-            quantity: "",
             recipientId: null,
             checked: false,
             order: 0,
@@ -335,8 +374,8 @@ describe("applyMessage", () => {
       const state = makeState({
         recipients: [{ id: "r1", name: "Marie", order: 0 }],
         items: [
-          { id: "i1", name: "Lego", quantity: "", recipientId: "r1", checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
-          { id: "i2", name: "Livre", quantity: "", recipientId: null, checked: false, order: 1, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
+          { id: "i1", name: "Lego", recipientId: "r1", checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
+          { id: "i2", name: "Livre", recipientId: null, checked: false, order: 1, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
         ],
       });
       applyMessage(state, { type: "deleteRecipient", id: "r1" }, NOW);
@@ -392,12 +431,12 @@ describe("applyMessage", () => {
     it("mode replace remplace intégralement items/recipients et le nom si fourni", () => {
       const state = makeState({
         name: "Ancienne",
-        items: [{ id: "old", name: "Old", quantity: "", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 }],
+        items: [{ id: "old", name: "Old", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 }],
         recipients: [{ id: "oldr", name: "OldRecipient", order: 0 }],
       });
       const data = {
         name: "Nouvelle",
-        items: [{ id: "new", name: "New", quantity: "", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 }],
+        items: [{ id: "new", name: "New", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 }],
         recipients: [{ id: "newr", name: "NewRecipient", order: 0 }],
       };
       applyMessage(state, { type: "importState", mode: "replace", data }, NOW);
@@ -438,7 +477,7 @@ describe("applyMessage", () => {
 
     it("mode merge ajoute les cadeaux nouveaux, ignore les doublons par nom, et remappe leur destinataire importé", () => {
       const state = makeState({
-        items: [{ id: "existing", name: "Lego", quantity: "", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 }],
+        items: [{ id: "existing", name: "Lego", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 }],
       });
       applyMessage(
         state,
@@ -448,11 +487,10 @@ describe("applyMessage", () => {
           data: {
             name: "",
             items: [
-              { id: "dup", name: "lego", quantity: "1", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
+              { id: "dup", name: "lego", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
               {
                 id: "new",
                 name: "Livre",
-                quantity: "",
                 recipientId: "imported-recipient",
                 checked: false,
                 order: 0,
@@ -488,11 +526,10 @@ describe("applyMessage", () => {
           data: {
             name: "",
             items: [
-              { id: "a", name: "Sans destinataire", quantity: "", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
+              { id: "a", name: "Sans destinataire", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
               {
                 id: "b",
                 name: "Destinataire fantôme",
-                quantity: "",
                 recipientId: "n-existe-pas",
                 checked: false,
                 order: 0,
@@ -518,7 +555,6 @@ describe("applyMessage", () => {
       const item = {
         id: "i1",
         name: "Lego",
-        quantity: "2",
         recipientId: "r1",
         checked: true,
         order: 3,
@@ -534,15 +570,15 @@ describe("applyMessage", () => {
     it("réinsère plusieurs cadeaux à la fois (annulation de « vider les cochés »)", () => {
       const state = makeState();
       const items = [
-        { id: "i1", name: "A", quantity: "", recipientId: null, checked: true, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
-        { id: "i2", name: "B", quantity: "", recipientId: null, checked: true, order: 1, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
+        { id: "i1", name: "A", recipientId: null, checked: true, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
+        { id: "i2", name: "B", recipientId: null, checked: true, order: 1, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
       ];
       applyMessage(state, { type: "restoreItems", items }, NOW);
       expect(state.items.map((i) => i.id)).toEqual(["i1", "i2"]);
     });
 
     it("ignore un cadeau dont l'id existe déjà (idempotent)", () => {
-      const existing = { id: "i1", name: "Lego", quantity: "", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 };
+      const existing = { id: "i1", name: "Lego", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 };
       const state = makeState({ items: [existing] });
       applyMessage(state, { type: "restoreItems", items: [{ ...existing, name: "Autre nom" }] }, NOW);
       expect(state.items).toEqual([existing]);
@@ -552,7 +588,7 @@ describe("applyMessage", () => {
   describe("restoreRecipient (annulation d'une suppression de destinataire)", () => {
     it("recrée le destinataire et réassigne les cadeaux encore sans destinataire", () => {
       const state = makeState({
-        items: [{ id: "i1", name: "Lego", quantity: "", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 }],
+        items: [{ id: "i1", name: "Lego", recipientId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 }],
       });
       const recipient = { id: "r1", name: "Marie", order: 0 };
       applyMessage(state, { type: "restoreRecipient", recipient, itemIds: ["i1"] }, NOW);
@@ -569,7 +605,7 @@ describe("applyMessage", () => {
 
     it("ne reprend pas un cadeau que l'utilisateur a réassigné entre-temps", () => {
       const state = makeState({
-        items: [{ id: "i1", name: "Lego", quantity: "", recipientId: "r2", checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 }],
+        items: [{ id: "i1", name: "Lego", recipientId: "r2", checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 }],
       });
       const recipient = { id: "r1", name: "Marie", order: 0 };
       applyMessage(state, { type: "restoreRecipient", recipient, itemIds: ["i1"] }, NOW);

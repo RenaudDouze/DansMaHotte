@@ -34,10 +34,7 @@ export const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "im
 
 export interface Item {
   id: string;
-  /** Item name with any leading/trailing quantity already stripped out. */
   name: string;
-  /** Free-form quantity label, e.g. "2", "x3". Empty string = none. */
-  quantity: string;
   recipientId: string | null;
   /** Dérivé du statut plutôt que coché indépendamment (pas de case à cocher
    * dans une liste de cadeaux) : toujours `status === "emballe"`, maintenu
@@ -53,6 +50,11 @@ export interface Item {
    * envoyé directement en websocket sans passer par le formulaire du
    * client. Optionnel pour les mêmes raisons que `status` ci-dessus. */
   link?: string;
+  /** Prix du cadeau, en euros (ex: 19.9). Absent = pas de prix renseigné.
+   * Toujours un nombre fini >= 0, arrondi au centime — voir la validation
+   * dans worker/reducer.ts, qui s'applique même à un message envoyé
+   * directement en websocket sans passer par le formulaire du client. */
+  price?: number;
   createdAt: number;
   updatedAt: number;
   /** Image jointe (photo ou capture d'écran) — voir
@@ -77,7 +79,16 @@ export type ClientMessage =
   | { type: "sync" }
   | { type: "renameList"; name: string }
   | { type: "addItem"; id: string; rawText: string; recipientId: string | null }
-  | { type: "updateItem"; id: string; name?: string; quantity?: string; recipientId?: string | null; status?: GiftStatus; link?: string }
+  | {
+      type: "updateItem";
+      id: string;
+      name?: string;
+      recipientId?: string | null;
+      status?: GiftStatus;
+      link?: string;
+      // null efface le prix ; undefined = champ non fourni, ne touche à rien.
+      price?: number | null;
+    }
   | { type: "deleteItem"; id: string }
   | { type: "clearChecked" }
   | { type: "reorderItems"; orderedIds: string[] }

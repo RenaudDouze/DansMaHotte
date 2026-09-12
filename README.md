@@ -12,9 +12,9 @@ de données externe).
   synchronisés instantanément via WebSocket.
 - **Partage facile** : code, QR code et lien direct (`/l/CODE`), avec le
   partage natif du téléphone quand il est disponible.
-- **Saisie libre avec quantité mise en avant** : tape par exemple `2x Lego`,
-  l'app détecte la quantité et l'affiche dans un badge séparé, modifiable en
-  un clic.
+- **Prix par cadeau, avec totaux** : renseigne un prix en un clic sur son
+  badge ; chaque personne affiche le total de ses cadeaux, et la liste
+  affiche son total général.
 - **Personnes** : les catégories sont les prénoms des gens à qui on offre —
   crée une personne, fais glisser les cadeaux vers elle, réordonne les
   personnes elles-mêmes.
@@ -123,8 +123,7 @@ chemins `/api/...` relatifs, comportement inchangé.
 worker/            Worker Cloudflare (routes API, dont l'upload/suppression
                     de photo), Durable Object ListRoom, et reducer.ts
                     (logique pure, testée unitairement)
-shared/            Types et logique partagés entre le Worker et le client
-                    (parsing de quantité inclus)
+shared/            Types partagés entre le Worker et le client
 src/                Application front (vue Accueil / vue Liste, composants,
                     utilitaires : websocket, drag & drop, stockage local…)
 e2e/                Tests fonctionnels Playwright (parcours principal, sync

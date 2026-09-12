@@ -484,6 +484,100 @@ test("cliquer le bouton de lien referme le popover s'il était déjà ouvert, et
   await expect(page.locator(".link-editor")).toHaveCount(0);
 });
 
+test("on peut ajouter, modifier et effacer le prix d'un cadeau, avec les totaux qui suivent", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.fill("#add-input", "Lego");
+  await page.click(".add-submit");
+  await page.fill("#add-input", "Livre");
+  await page.click(".add-submit");
+  await expect(page.locator(".item")).toHaveCount(2);
+
+  const lego = page.locator(".item", { has: page.locator(".item-name", { hasText: "Lego" }) });
+  const livre = page.locator(".item", { has: page.locator(".item-name", { hasText: "Livre" }) });
+  await expect(lego.locator(".item-price")).toHaveClass(/item-price-empty/);
+  await expect(lego.locator(".item-price")).toHaveText("+");
+  await expect(page.locator(".totals-bar")).toBeHidden();
+
+  // Saisie avec une virgule décimale (usage français courant), arrondie au
+  // centime par le serveur.
+  await lego.locator(".item-price").click();
+  await page.fill(".item-price .inline-edit", "19,999");
+  await page.keyboard.press("Enter");
+  await expect(lego.locator(".item-price")).toHaveText("20,00 €");
+  await expect(lego.locator(".item-price")).not.toHaveClass(/item-price-empty/);
+  await expect(page.locator(".totals-bar")).toHaveText("Total : 20,00 €");
+
+  // Un second prix s'additionne au total.
+  await livre.locator(".item-price").click();
+  await page.fill(".item-price .inline-edit", "10");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".totals-bar")).toHaveText("Total : 30,00 €");
+
+  // Persiste après rechargement (aller-retour serveur, pas juste local).
+  await page.reload();
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+  await expect(page.locator(".totals-bar")).toHaveText("Total : 30,00 €");
+
+  // Une saisie invalide est rejetée (toast) et n'altère pas le prix existant.
+  await page.locator(".item", { has: page.locator(".item-name", { hasText: "Lego" }) })
+    .locator(".item-price")
+    .click();
+  await page.fill(".item-price .inline-edit", "abc");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".toast")).toContainText("Prix invalide");
+  await expect(page.locator(".totals-bar")).toHaveText("Total : 30,00 €");
+
+  // Vider le champ efface le prix.
+  await page.locator(".item", { has: page.locator(".item-name", { hasText: "Lego" }) })
+    .locator(".item-price")
+    .click();
+  await page.fill(".item-price .inline-edit", "");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".item", { has: page.locator(".item-name", { hasText: "Lego" }) }).locator(".item-price")).toHaveText("+");
+  await expect(page.locator(".totals-bar")).toHaveText("Total : 10,00 €");
+});
+
+test("le total par destinataire n'apparaît que si l'un de ses cadeaux a un prix, et s'additionne au total général", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-recipients"]');
+  await page.fill("#new-recipient-name", "Marie");
+  await page.click("#new-recipient-form button[type=submit]");
+  await expect(page.locator(".manage-recipient-list li", { hasText: "Marie" })).toHaveCount(1);
+  await page.fill("#new-recipient-name", "Paul");
+  await page.click("#new-recipient-form button[type=submit]");
+  await expect(page.locator(".manage-recipient-list li", { hasText: "Paul" })).toHaveCount(1);
+  await page.keyboard.press("Escape");
+
+  await page.selectOption("#add-recipient", { label: "Marie" });
+  await page.fill("#add-input", "Écharpe");
+  await page.click(".add-submit");
+  await page.selectOption("#add-recipient", { label: "Paul" });
+  await page.fill("#add-input", "Stylo");
+  await page.click(".add-submit");
+  await expect(page.locator(".item")).toHaveCount(2);
+
+  const marieSection = page.locator(".recipient-section", { has: page.locator(".person-name", { hasText: "Marie" }) });
+  const paulSection = page.locator(".recipient-section", { has: page.locator(".person-name", { hasText: "Paul" }) });
+  await expect(marieSection.locator(".recipient-total")).toHaveCount(0);
+  await expect(paulSection.locator(".recipient-total")).toHaveCount(0);
+
+  await marieSection.locator(".item-price").click();
+  await page.fill(".item-price .inline-edit", "25");
+  await page.keyboard.press("Enter");
+  await expect(marieSection.locator(".recipient-total")).toHaveText("25,00 €");
+  await expect(paulSection.locator(".recipient-total")).toHaveCount(0);
+  await expect(page.locator(".totals-bar")).toHaveText("Total : 25,00 €");
+});
+
 test("on peut choisir manuellement la couleur d'une personne, puis revenir à l'automatique", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");

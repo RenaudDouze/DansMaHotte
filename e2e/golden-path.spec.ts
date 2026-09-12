@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("parcours complet : créer, ajouter avec quantité, assigner une personne, changer le statut, partager, exporter/importer", async ({ page }) => {
+test("parcours complet : créer, ajouter, mettre un prix, assigner une personne, changer le statut, partager, exporter/importer", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".home-header h1")).toHaveText("DansMaHotte");
 
@@ -10,17 +10,24 @@ test("parcours complet : créer, ajouter avec quantité, assigner une personne, 
   await page.waitForURL(/\/l\//);
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
 
-  // Ajout avec extraction de quantité, prévisualisée avant même l'envoi
-  await page.fill("#add-input", "2x Lego");
-  await expect(page.locator("#add-preview-qty")).toHaveText("x2");
+  await page.fill("#add-input", "Lego");
   await page.click(".add-submit");
   await expect(page.locator(".item .item-name")).toHaveText("Lego");
-  await expect(page.locator(".item .qty-badge")).toHaveText("x2");
 
-  // Un cadeau sans quantité détectée affiche le badge "+" (à éditer au besoin)
+  // Un cadeau sans prix renseigné affiche le badge "+" (à éditer au besoin) ;
+  // le renseigner met à jour le badge et le total de la liste, jusque-là masqué.
+  await expect(page.locator(".totals-bar")).toBeHidden();
+  await page.locator(".item-price").click();
+  await page.fill(".item-price .inline-edit", "20");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".item-price")).toHaveText("20,00 €");
+  await expect(page.locator(".totals-bar")).toHaveText("Total : 20,00 €");
+
+  // Un second cadeau sans prix ne change pas le total.
   await page.fill("#add-input", "Livre");
   await page.click(".add-submit");
   await expect(page.locator(".item")).toHaveCount(2);
+  await expect(page.locator(".totals-bar")).toHaveText("Total : 20,00 €");
 
   // Personnes : création, puis assignation via le sélecteur du formulaire.
   await page.click("#btn-menu");
@@ -34,6 +41,15 @@ test("parcours complet : créer, ajouter avec quantité, assigner une personne, 
 
   const marieSection = page.locator(".recipient-section", { has: page.locator(".person-name", { hasText: "Marie" }) });
   await expect(marieSection.locator(".item-name")).toHaveText(["Écharpe"]);
+
+  // Le total par personne n'apparaît qu'une fois un prix renseigné sur un de
+  // ses cadeaux, et s'ajoute au total général de la liste.
+  await expect(marieSection.locator(".recipient-total")).toHaveCount(0);
+  await marieSection.locator(".item-price").click();
+  await page.fill(".item-price .inline-edit", "15");
+  await page.keyboard.press("Enter");
+  await expect(marieSection.locator(".recipient-total")).toHaveText("15,00 €");
+  await expect(page.locator(".totals-bar")).toHaveText("Total : 35,00 €");
 
   // Passer un cadeau au statut "Emballé" le fait basculer visuellement
   const livre = page.locator(".item", { has: page.locator(".item-name", { hasText: "Livre" }) });
