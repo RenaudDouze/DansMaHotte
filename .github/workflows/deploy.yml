@@ -1,0 +1,95 @@
+name: Déploiement Cloudflare
+
+on:
+  # Se déclenche à la fin du workflow CI plutôt que sur push directement :
+  # garantit qu'on ne déploie jamais un commit sur lequel lint/typecheck/
+  # tests/build ont échoué, y compris en cas de push direct sur main qui
+  # contournerait une éventuelle protection de branche basée sur les PR.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # write (et non read) : le tag de déploiement ci-dessous doit pouvoir pousser
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: cloudflare
+      # Optionnel : réglable dans Settings → Secrets and variables → Actions
+      # → Variables une fois l'URL *.workers.dev (ou le domaine personnalisé)
+      # connue. Absente = pas d'URL affichée dans l'onglet Environments, et
+      # la vérification post-déploiement ci-dessous est sautée.
+      url: ${{ vars.DEPLOY_URL }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Le SHA exact qui a passé la CI, pas juste « la HEAD actuelle de
+          # main » qui a pu bouger entre-temps si des pushes s'enchaînent.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      - name: Créer le bucket R2 des images (idempotent)
+        # Contrairement aux Durable Objects/rate limiters déclarés dans
+        # wrangler.json, un bucket R2 doit exister avant le déploiement — il
+        # n'est pas créé automatiquement. Idempotent : ne fait rien s'il
+        # existe déjà, échoue sur toute autre erreur (ex: jeton sans les
+        # droits R2).
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -eo pipefail
+          if ! npx wrangler r2 bucket create dansmahotte-item-images 2>&1 | tee /tmp/r2-create.log; then
+            grep -qi "already exists" /tmp/r2-create.log || { cat /tmp/r2-create.log; exit 1; }
+          fi
+
+      - uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Vérification post-déploiement
+        if: vars.DEPLOY_URL != ''
+        run: |
+          set -euo pipefail
+          base="${{ vars.DEPLOY_URL }}"
+
+          home_code=$(curl -sS -o /dev/null -w '%{http_code}' "$base/")
+          if [ "$home_code" != "200" ]; then
+            echo "::error::La page d'accueil répond avec le code $home_code au lieu de 200."
+            exit 1
+          fi
+
+          # Code au format valide mais quasi certainement jamais attribué
+          # (voir worker/index.ts) : confirme que l'API et le binding
+          # Durable Object répondent, en lecture seule (aucune liste créée).
+          api_code=$(curl -sS -o /dev/null -w '%{http_code}' "$base/api/lists/AAAAAA")
+          if [ "$api_code" != "404" ]; then
+            echo "::error::L'API répond avec le code $api_code au lieu de 404 attendu."
+            exit 1
+          fi
+
+          echo "OK (accueil $home_code, API $api_code)."
+
+      - name: Tag de déploiement (pour repérer/rollback une version)
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          tag="deploy-${{ github.run_number }}"
+          git tag -a "$tag" -m "Déploiement Cloudflare (run ${{ github.run_id }})"
+          git push origin "$tag"

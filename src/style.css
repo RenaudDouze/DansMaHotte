@@ -1,0 +1,1020 @@
+:root {
+  --bg: #f4f6f3;
+  --surface: #ffffff;
+  --text: #1a2420;
+  --text-muted: #66756d;
+  --border: #e1e6e1;
+  --primary: #1f8a53;
+  --primary-dark: #166a3f;
+  --primary-contrast: #ffffff;
+  --danger: #c4453a;
+  --favorite: #d99a00;
+  --priority-normal: #3d6a94;
+  --priority-low: #5f6b78;
+  --checked-bg: #eef1ee;
+  --shadow: 0 1px 3px rgba(20, 30, 25, 0.08), 0 1px 2px rgba(20, 30, 25, 0.06);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121815;
+    --surface: #1b2420;
+    --text: #eaf0ec;
+    --text-muted: #93a49b;
+    --border: #2c3a33;
+    --primary: #35b876;
+    --primary-dark: #2a9862;
+    --primary-contrast: #06150d;
+    --danger: #e2685d;
+    --favorite: #f0b429;
+    --priority-normal: #6fa8dc;
+    --priority-low: #8a97a6;
+    --checked-bg: #1f2a25;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #121815;
+  --surface: #1b2420;
+  --text: #eaf0ec;
+  --text-muted: #93a49b;
+  --border: #2c3a33;
+  --primary: #35b876;
+  --primary-dark: #2a9862;
+  --primary-contrast: #06150d;
+  --danger: #e2685d;
+  --favorite: #f0b429;
+  --priority-normal: #6fa8dc;
+  --priority-low: #8a97a6;
+  --checked-bg: #1f2a25;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+#app {
+  max-width: 640px;
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+input,
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.65em 0.8em;
+}
+
+input:focus,
+select:focus,
+button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 0.65em 1.1em;
+  cursor: pointer;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.btn.primary {
+  background: var(--primary);
+  color: var(--primary-contrast);
+  border-color: var(--primary);
+}
+
+.btn.danger {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 1.15rem;
+  padding: 0.4em;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.icon-btn:hover {
+  background: var(--checked-bg);
+}
+
+/* Étape d'armement avant confirmation d'une suppression (voir
+   src/lib/confirmClick.ts) : un second clic au même endroit confirme. */
+.confirm-armed {
+  background: var(--danger) !important;
+  color: #fff !important;
+}
+
+/* ---------- Home ---------- */
+
+.home {
+  position: relative;
+  padding: 1.5rem 1rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.theme-toggle {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  font-size: 1.2rem;
+}
+
+.home-header {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.home-header .logo {
+  font-size: 2.6rem;
+}
+
+.home-header h1 {
+  margin: 0.3rem 0 0.2rem;
+  font-size: 1.5rem;
+}
+
+.tagline {
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.privacy-note {
+  font-size: 0.8rem;
+  margin-top: 0.4rem;
+}
+
+/* Rappel compact directement sous les champs où on saisit des données
+   (nom de liste, cadeau), en complément du message plus complet affiché
+   sur l'accueil et en bas de la vue liste. */
+.add-form-hint {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin: 0.4rem 0 0;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: var(--shadow);
+}
+
+.card h2 {
+  margin: 0 0 0.7rem;
+  font-size: 1.05rem;
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.error {
+  color: var(--danger);
+  margin: 0.6rem 0 0;
+  font-size: 0.9rem;
+}
+
+.recent-subheading {
+  margin: 0.9rem 0 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.recent-subheading:first-of-type {
+  margin-top: 0;
+}
+
+.recent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.recent-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.recent-open {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6em 0.8em;
+  cursor: pointer;
+  text-align: left;
+}
+
+.recent-name {
+  font-weight: 600;
+}
+
+.recent-favorite {
+  color: var(--text-muted);
+}
+
+.recent-favorite[aria-pressed="true"] {
+  color: var(--favorite);
+}
+
+/* ---------- List view ---------- */
+
+.list-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-bottom: 2rem;
+}
+
+/* Poussée en bas de l'écran par la colonne flex tant que le contenu est
+   court (liste vide ou peu remplie) ; passe sous les cadeaux dans le flux
+   normal dès que la liste dépasse la hauteur de l'écran. */
+.list-privacy-note {
+  margin-top: auto;
+  padding: 1rem 0.8rem 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.list-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.list-title {
+  flex: 1;
+  font-size: 1.1rem;
+  margin: 0;
+  cursor: text;
+  padding: 0.2em 0.3em;
+  border-radius: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-title:hover {
+  background: var(--checked-bg);
+}
+
+.lock-badge {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.conn-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #c9a227;
+  flex-shrink: 0;
+}
+
+.conn-dot.online {
+  background: var(--primary);
+}
+
+.menu-panel {
+  position: absolute;
+  top: 100%;
+  right: 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 220px;
+}
+
+.menu-panel button {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 0.75em 1em;
+  cursor: pointer;
+}
+
+.menu-panel button:hover {
+  background: var(--checked-bg);
+}
+
+.presence-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+}
+
+.presence-count {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.presence-panel {
+  right: auto;
+  left: 0.8rem;
+  min-width: 160px;
+  padding: 0.4em 0;
+}
+
+.presence-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.presence-list li {
+  padding: 0.5em 1em;
+}
+
+.menu-item-icon {
+  display: inline-flex;
+  width: 1.1em;
+  vertical-align: -0.2em;
+  margin-right: 0.3em;
+  color: var(--text-muted);
+}
+
+.add-form {
+  padding: 0.8rem;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.search-bar input {
+  flex: 1;
+  min-width: 0;
+}
+
+.add-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.add-input-wrap {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.add-input-wrap input {
+  width: 100%;
+  padding-right: 3.4rem;
+}
+
+.qty-preview {
+  position: absolute;
+  right: 0.4rem;
+}
+
+#add-recipient {
+  max-width: 9.5rem;
+}
+
+.add-submit {
+  padding-inline: 0.9rem;
+  font-size: 1.2rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.recipients {
+  padding: 0.4rem 0.6rem 2rem;
+  flex: 1;
+}
+
+.recipient-section + .recipient-section {
+  margin-top: 0.6rem;
+}
+
+.recipient-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.4rem 0.2rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.person-name,
+.recipient-name {
+  flex: 1;
+  cursor: text;
+  color: var(--text);
+  text-transform: none;
+  font-size: 0.95rem;
+}
+
+.recipient-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.person-dot,
+.recipient-dot {
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: hsl(var(--person-hue) 65% 50%);
+}
+
+/* Léger accent de couleur par personne : bordure gauche + fond très
+   discret, mélangés avec la surface pour rester lisibles dans les deux
+   thèmes sans définir de variante sombre séparée. */
+.recipient-section.has-color .item-list {
+  border-left: 2px solid hsl(var(--person-hue) 60% 55% / 0.5);
+  padding-left: 0.5rem;
+  margin-left: -0.5rem;
+}
+
+.drag-handle {
+  background: none;
+  border: none;
+  cursor: grab;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  padding: 0.3em 0.1em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+
+.drag-handle-spacer {
+  width: 1.6rem;
+  flex-shrink: 0;
+}
+
+.item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-height: 0.5rem;
+}
+
+.item {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.item.dragging .item-content {
+  opacity: 0.5;
+}
+
+.item-swipe-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 1.1rem;
+  background: var(--danger);
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.item-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.5rem 0.5rem;
+  touch-action: pan-y;
+}
+
+.item.checked .item-content {
+  background: var(--checked-bg);
+}
+
+.item.checked .item-name {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.item-check {
+  width: 1.2em;
+  height: 1.2em;
+  accent-color: var(--primary);
+  flex-shrink: 0;
+}
+
+.qty-badge {
+  flex-shrink: 0;
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font-weight: 700;
+  font-size: 0.85rem;
+  border-radius: 999px;
+  padding: 0.25em 0.5em;
+  min-width: 1.6em;
+  text-align: center;
+  cursor: text;
+  white-space: nowrap;
+}
+
+.qty-badge.qty-empty {
+  background: var(--checked-bg);
+  color: var(--text-muted);
+}
+
+.item-name {
+  flex: 1;
+  min-width: 0;
+  cursor: text;
+  overflow-wrap: anywhere;
+}
+
+/* Petite barre verticale de couleur (gris/bleu/rouge selon la priorité) :
+   volontairement pas une pastille ronde, pour ne pas se confondre avec
+   .person-dot (le rond de couleur des personnes, dans l'en-tête). La
+   zone cliquable dépasse largement le trait visible (::before), pour
+   rester facile à toucher malgré sa finesse. */
+.item-priority {
+  position: relative;
+  flex-shrink: 0;
+  width: 4px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  background: var(--priority-low);
+}
+
+.item-priority::before {
+  content: "";
+  position: absolute;
+  inset: -8px -10px;
+}
+
+.item-priority[data-priority="0"] {
+  background: var(--priority-low);
+  opacity: 0.55;
+}
+
+.item-priority[data-priority="1"] {
+  background: var(--priority-normal);
+}
+
+.item-priority[data-priority="2"] {
+  background: var(--danger);
+}
+
+.item-photo {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--checked-bg);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  padding: 0;
+  font-size: 0.9rem;
+}
+
+.item-photo-empty {
+  border-style: dashed;
+}
+
+.item-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.item-photo.is-loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.item-delete {
+  flex-shrink: 0;
+  font-size: 1rem;
+  padding: 0.3em;
+  color: var(--text-muted);
+}
+
+/* Un peu plus compacte que .drag-handle générique (aussi utilisée pour
+   les personnes) : dans une ligne de cadeau, chaque px gagné profite
+   directement au nom, souvent le plus contraint. */
+.item-drag-handle {
+  font-size: 1rem;
+}
+
+.item-delete:hover {
+  color: var(--danger);
+}
+
+.inline-edit {
+  width: 100%;
+  padding: 0.15em 0.3em;
+  border-radius: 6px;
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 3rem 1rem;
+}
+
+.centered-message {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+/* ---------- Modals ---------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 15, 12, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 50;
+  padding: 0;
+}
+
+@media (min-width: 560px) {
+  .modal-overlay {
+    align-items: center;
+    padding: 1rem;
+  }
+}
+
+.modal {
+  background: var(--surface);
+  border-radius: 18px 18px 0 0;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 460px;
+  position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+@media (min-width: 560px) {
+  .modal {
+    border-radius: 18px;
+  }
+}
+
+.modal h2 {
+  margin: 0 0 1rem;
+  padding-right: 2rem;
+}
+
+.modal-close {
+  position: absolute;
+  top: 0.8rem;
+  right: 0.8rem;
+}
+
+.share-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 2rem;
+  letter-spacing: 0.2em;
+  text-align: center;
+  padding: 0.4em;
+  background: var(--checked-bg);
+  border-radius: 12px;
+  margin-bottom: 1rem;
+}
+
+.qr-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.qr-wrap svg {
+  width: 180px;
+  height: 180px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.share-link {
+  text-align: center;
+  color: var(--text-muted);
+  word-break: break-all;
+  font-size: 0.85rem;
+  margin: 0 0 1rem;
+}
+
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.share-io-actions {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.stacked-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.manage-recipient-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.manage-recipient-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.4em 0.6em;
+}
+
+.recipient-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.color-swatch-toggle {
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.color-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.color-swatch {
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: hsl(var(--swatch-hue) 65% 50%);
+  cursor: pointer;
+  padding: 0;
+}
+
+.color-swatch.selected {
+  border-color: var(--text);
+}
+
+.color-swatch-auto {
+  width: auto;
+  height: 1.3rem;
+  border-radius: 999px;
+  padding: 0 0.6em;
+  font-size: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.color-swatch-auto.selected {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.hint {
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.toast {
+  position: fixed;
+  bottom: 1.2rem;
+  left: 50%;
+  transform: translate(-50%, 10px);
+  background: var(--text);
+  color: var(--bg);
+  padding: 0.7em 1.1em;
+  border-radius: 10px;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 100;
+  max-width: 90vw;
+  text-align: center;
+}
+
+.undo-toast {
+  position: fixed;
+  bottom: 1.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--bg);
+  padding: 0.6em 0.6em 0.6em 1.1em;
+  border-radius: 10px;
+  z-index: 100;
+  max-width: 90vw;
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  box-shadow: var(--shadow);
+}
+
+.undo-toast span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.undo-toast button {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--bg) 40%, transparent);
+  color: inherit;
+  border-radius: 8px;
+  padding: 0.4em 0.8em;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.undo-toast button:hover {
+  background: color-mix(in srgb, var(--bg) 15%, transparent);
+}
+
+.celebration-toast {
+  position: fixed;
+  top: 1.2rem;
+  left: 50%;
+  transform: translate(-50%, -10px) scale(0.9);
+  background: var(--primary);
+  color: var(--primary-contrast);
+  padding: 0.8em 1.3em;
+  border-radius: 999px;
+  font-weight: 700;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  z-index: 100;
+  max-width: 90vw;
+  text-align: center;
+}
+
+.celebration-toast.visible {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.toast.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* Après .modal-overlay (même spécificité) : doit primer sur son
+   background par défaut, plus clair. */
+.image-lightbox-overlay {
+  background: rgba(0, 0, 0, 0.85);
+  cursor: zoom-out;
+}
+
+.image-lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.image-lightbox-close,
+.image-lightbox-delete {
+  position: fixed;
+  top: 0.75rem;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  z-index: 31;
+}
+
+.image-lightbox-close {
+  right: 0.75rem;
+}
+
+.image-lightbox-delete {
+  left: 0.75rem;
+}
+
+.image-lightbox-close:hover,
+.image-lightbox-delete:hover {
+  background: rgba(0, 0, 0, 0.75);
+}

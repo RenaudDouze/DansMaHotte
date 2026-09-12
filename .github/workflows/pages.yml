@@ -1,0 +1,62 @@
+name: Déploiement GitHub Pages
+
+on:
+  # Comme deploy.yml : se déclenche après un CI réussi sur main, jamais sur
+  # un commit dont lint/typecheck/tests/build ont échoué.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build (client pointant vers le Worker Cloudflare)
+        env:
+          # Le client GitHub Pages est servi sur une origine différente du
+          # Worker : cette variable (Settings → Secrets and variables →
+          # Actions → Variables, vars.DEPLOY_URL — la même que celle lue par
+          # deploy.yml pour sa vérification post-déploiement) lui indique où
+          # trouver l'API et le WebSocket. Valeur de repli : l'URL
+          # *.workers.dev par défaut du Worker actuellement déployé.
+          VITE_SYNC_WORKER_URL: ${{ vars.DEPLOY_URL || 'https://dansmahotte.douzem.workers.dev' }}
+          # Un dépôt de projet (pas <user>.github.io) est servi sous
+          # /<nom-du-dépôt>/ plutôt qu'à la racine du domaine : voir `base`
+          # dans vite.config.ts et src/lib/basePath.ts.
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+        run: npm run build
+      - name: Fallback SPA (routes /l/CODE rechargées ou ouvertes directement)
+        # GitHub Pages n'a pas d'équivalent au `not_found_handling:
+        # single-page-application` de Cloudflare : sans ceci, ouvrir ou
+        # recharger un lien partagé donnerait un 404 au lieu de servir l'app,
+        # qui route elle-même via location.pathname une fois chargée.
+        run: cp dist/client/index.html dist/client/404.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist/client
+      - id: deployment
+        uses: actions/deploy-pages@v4
