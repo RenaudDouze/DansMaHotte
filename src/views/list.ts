@@ -18,7 +18,6 @@ import { alnumCompare } from "../lib/sort";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
 import { cycleItemSortPreference, getItemSortPreference, itemSortLabel } from "../lib/itemSortPreference";
 import { getHideCheckedPreference, toggleHideCheckedPreference } from "../lib/hideCheckedPreference";
-import { getDeviceName } from "../lib/presence";
 import { privacyHint } from "../lib/privacyHint";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
@@ -143,7 +142,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   // null = pas encore évalué (évite de célébrer à l'ouverture d'une liste
   // déjà entièrement emballée) ; sinon, reflète l'état à la dernière vérification.
   let wasFullyChecked: boolean | null = null;
-  const conn = new ListConnection(code, getDeviceName());
+  const conn = new ListConnection(code);
 
   const UNDO_TIMEOUT_MS = 5000;
   const MAX_UNDO_STACK = 10;
@@ -214,7 +213,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   conn.onState(onStateUpdate);
-  conn.onPresence((names) => renderPresence(names));
   conn.onConnectionChange((isConnected) => {
     connected = isConnected;
     updateConnDot();
@@ -337,36 +335,12 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     dot.setAttribute("title", connected ? "Synchronisé" : "Connexion…");
   }
 
-  function renderPresence(names: string[]): void {
-    const countEl = root.querySelector("#presence-count");
-    if (countEl) countEl.textContent = String(names.length);
-    const panel = root.querySelector("#presence-panel");
-    if (!panel) return;
-    const ownName = getDeviceName();
-    if (names.length === 0) {
-      panel.innerHTML = "";
-      return;
-    }
-    const items = names.map((n) => (n === ownName ? "Toi" : n));
-    panel.innerHTML = `<ul class="presence-list">${items.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
-  }
-
   function wireHeader(): void {
     root.querySelector("#btn-home")?.addEventListener("click", () => navigate("/"));
     root.querySelector("#btn-hide-checked")?.addEventListener("click", (e) => {
       toggleHideCheckedPreference();
       updateHideCheckedButton(e.currentTarget as HTMLElement);
       renderRecipients();
-    });
-
-    const presenceBtn = root.querySelector("#btn-presence");
-    const presencePanel = root.querySelector("#presence-panel") as HTMLElement | null;
-    presenceBtn?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (presencePanel) presencePanel.hidden = !presencePanel.hidden;
-    });
-    document.addEventListener("click", () => {
-      if (presencePanel) presencePanel.hidden = true;
     });
 
     const searchBar = root.querySelector("#search-bar") as HTMLElement | null;
@@ -1150,10 +1124,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <h1 class="list-title" id="list-title">${escapeHtml(s.name)}</h1>
           <span class="lock-badge" title="Données chiffrées sur le serveur" aria-label="Données chiffrées sur le serveur">${icons.lock}</span>
           <span class="conn-dot ${isConnected ? "online" : ""}" id="conn-dot" title="${isConnected ? "Synchronisé" : "Connexion…"}"></span>
-          <button class="icon-btn presence-btn" id="btn-presence" aria-label="Personnes connectées">
-            ${icons.users}<span class="presence-count" id="presence-count">1</span>
-          </button>
-          <div class="menu-panel presence-panel" id="presence-panel" hidden></div>
           <button class="icon-btn" id="btn-search" aria-label="Rechercher">${icons.search}</button>
           ${hideCheckedButtonHtml(getHideCheckedPreference())}
           <button class="icon-btn" id="btn-menu" aria-label="Menu">${icons.more}</button>
