@@ -8,6 +8,14 @@ interface Env {
   ASSETS: Fetcher;
   ITEM_IMAGES: R2Bucket;
   IMAGE_WRITE_RATE_LIMITER: RateLimit;
+  // Le code à 6 caractères d'une liste est le seul contrôle d'accès de l'app
+  // (voir README "Confidentialité") : sans limite de débit, rien n'empêche
+  // de le deviner par force brute via ces deux routes (la seule façon de
+  // vérifier si un code correspond à une liste existante). LIST_CREATE_RATE_LIMITER
+  // limite séparément la création, plus rare pour un usage normal, pour
+  // éviter un abus de stockage (créer des listes en boucle).
+  LIST_LOOKUP_RATE_LIMITER: RateLimit;
+  LIST_CREATE_RATE_LIMITER: RateLimit;
 }
 
 // Ambiguous characters (0/O, 1/I) are excluded so codes are easy to read aloud
@@ -56,6 +64,16 @@ function jsonError(message: string, status: number): Response {
   });
 }
 
+/** `CF-Connecting-IP` n'est présent que sur le réseau Cloudflare (jamais en
+ * local/CI) : sans IP, on laisse passer plutôt que de bloquer toute requête
+ * qui n'en porte pas. */
+async function isRateLimited(limiter: RateLimit, request: Request): Promise<boolean> {
+  const ip = request.headers.get("CF-Connecting-IP");
+  if (!ip) return false;
+  const { success } = await limiter.limit({ key: ip });
+  return !success;
+}
+
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
@@ -65,6 +83,9 @@ export default {
     }
 
     if (url.pathname === "/api/lists" && request.method === "POST") {
+      if (await isRateLimited(env.LIST_CREATE_RATE_LIMITER, request)) {
+        return jsonError("Trop de tentatives, réessaie dans une minute.", 429);
+      }
       const body = await request.json<{ name?: string }>().catch(() => ({}) as { name?: string });
 
       let code = generateCode();
@@ -88,6 +109,13 @@ export default {
     if (listMatch) {
       const code = normalizeCode(listMatch[1]);
       const isWs = Boolean(listMatch[2]);
+
+      if (await isRateLimited(env.LIST_LOOKUP_RATE_LIMITER, request)) {
+        return isWs
+          ? new Response("Trop de tentatives, réessaie dans une minute.", { status: 429 })
+          : jsonError("Trop de tentatives, réessaie dans une minute.", 429);
+      }
+
       const stub = env.LIST_ROOM.get(env.LIST_ROOM.idFromName(code));
 
       if (isWs) {
@@ -128,12 +156,8 @@ export default {
         });
       }
 
-      const ip = request.headers.get("CF-Connecting-IP");
-      if (ip) {
-        const { success } = await env.IMAGE_WRITE_RATE_LIMITER.limit({ key: ip });
-        if (!success) {
-          return jsonError("Trop de tentatives, réessaie dans une minute.", 429);
-        }
+      if (await isRateLimited(env.IMAGE_WRITE_RATE_LIMITER, request)) {
+        return jsonError("Trop de tentatives, réessaie dans une minute.", 429);
       }
 
       const stub = env.LIST_ROOM.get(env.LIST_ROOM.idFromName(code));
