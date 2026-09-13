@@ -209,7 +209,11 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     loading = false;
     notFound = false;
     cacheListState(next);
-    touchRecentList(next.code, next.name);
+    // Pas touchRecentList ici : cette fonction tourne à chaque diffusion
+    // serveur, donc à chaque modification faite par n'importe quel appareil
+    // connecté (pas seulement une visite de l'utilisateur courant). Le vrai
+    // "ouverture de la liste" est déjà couvert par l'appel dans le fetch
+    // initial plus bas.
     render();
   }
 
@@ -271,6 +275,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       wireHeader();
       wireAddForm();
       wireMenu();
+      wireRecipientsInteractions(root.querySelector("#recipients") as HTMLElement);
       shellMounted = true;
     } else {
       updateTitle();
@@ -796,16 +801,30 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     const query = searchQuery.trim().toLowerCase();
     const alphabeticalItems = getItemSortPreference() === "alphabetical";
     const hideChecked = getHideCheckedPreference();
-    const byRecipient = (recipientId: string | null): Item[] =>
-      state!.items.filter(
-        (i) => i.recipientId === recipientId && (!query || i.name.toLowerCase().includes(query)) && (!hideChecked || !i.checked),
-      );
-    const hasAnyGift = (recipientId: string | null): boolean => state!.items.some((i) => i.recipientId === recipientId);
+
+    // Un seul passage sur tous les cadeaux plutôt qu'un filter/reduce complet
+    // par personne (ce qui serait O(nombre de cadeaux × nombre de personnes)) :
+    // on regroupe une bonne fois par recipientId, byRecipient/recipientTotal/
+    // hasAnyGift ne font plus que lire ces regroupements.
+    const itemsByRecipient = new Map<string | null, Item[]>();
+    const totalByRecipient = new Map<string | null, number>();
+    for (const item of state.items) {
+      const key = item.recipientId;
+      const items = itemsByRecipient.get(key);
+      if (items) items.push(item);
+      else itemsByRecipient.set(key, [item]);
+      totalByRecipient.set(key, (totalByRecipient.get(key) ?? 0) + (item.price ?? 0));
+    }
+    const byRecipient = (recipientId: string | null): Item[] => {
+      const items = itemsByRecipient.get(recipientId) ?? [];
+      if (!query && !hideChecked) return items;
+      return items.filter((i) => (!query || i.name.toLowerCase().includes(query)) && (!hideChecked || !i.checked));
+    };
+    const hasAnyGift = (recipientId: string | null): boolean => (itemsByRecipient.get(recipientId)?.length ?? 0) > 0;
     // Toujours calculé sur l'ensemble des cadeaux de la personne, indépendamment
     // de la recherche ou de "masquer les cadeaux emballés" en cours : le budget
     // d'une personne ne doit pas varier selon l'affichage du moment.
-    const recipientTotal = (recipientId: string | null): number =>
-      state!.items.filter((i) => i.recipientId === recipientId).reduce((sum, i) => sum + (i.price ?? 0), 0);
+    const recipientTotal = (recipientId: string | null): number => totalByRecipient.get(recipientId) ?? 0;
     const sortItems = (items: Item[]): Item[] =>
       [...items].sort(
         (a, b) => Number(a.checked) - Number(b.checked) || (alphabeticalItems ? alnumCompare(a.name, b.name) : a.order - b.order),
@@ -843,25 +862,16 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
     if (groups.length === 0 && query) {
       container.innerHTML = `<div class="empty-state">Aucun cadeau ne correspond à « ${escapeHtml(searchQuery.trim())} ».</div>`;
-      disposeItemDnd?.();
-      disposeRecipientDnd?.();
-      disposeSwipe?.();
       return;
     }
 
     if (groups.length === 0 && hideChecked && state.items.length > 0) {
       container.innerHTML = `<div class="empty-state">Tous les cadeaux sont emballés (et masqués).</div>`;
-      disposeItemDnd?.();
-      disposeRecipientDnd?.();
-      disposeSwipe?.();
       return;
     }
 
     if (groups.length === 0) {
       container.innerHTML = `<div class="empty-state">Ta liste est vide. Ajoute un premier cadeau ci-dessus 👆</div>`;
-      disposeItemDnd?.();
-      disposeRecipientDnd?.();
-      disposeSwipe?.();
       return;
     }
 
@@ -973,11 +983,16 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     });
 
     wireItemImages(container);
+  }
 
-    disposeItemDnd?.();
-    disposeRecipientDnd?.();
-    disposeSwipe?.();
-
+  /** Glisser-déposer (cadeaux + personnes) et glisser-supprimer, câblés une
+   * seule fois sur le conteneur #recipients (stable d'un rendu à l'autre,
+   * seul son innerHTML est remplacé) plutôt que détruits/recréés à chaque
+   * appel de renderRecipients : les callbacks ci-dessous ne lisent que
+   * `state`/le DOM au moment du drop, donc rester attachés au conteneur
+   * entre deux rendus ne change rien à leur comportement — juste beaucoup
+   * moins de (dés)abonnements sur une liste très active. */
+  function wireRecipientsInteractions(container: HTMLElement): void {
     // Le glisser-déposer reste actif même en tri alphabétique : il permet
     // toujours de déplacer un cadeau vers une autre personne. Seul le
     // repositionnement au sein d'une même personne n'a plus d'effet visuel

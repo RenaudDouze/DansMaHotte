@@ -5,7 +5,7 @@
 import type { ListState, ClientMessage, Item, Recipient } from "../shared/types";
 
 export function nextOrder(list: { order: number }[]): number {
-  return list.length === 0 ? 0 : Math.max(...list.map((x) => x.order)) + 1;
+  return list.reduce((max, x) => Math.max(max, x.order), -1) + 1;
 }
 
 /** A recipient id only survives if it still names a real recipient — never

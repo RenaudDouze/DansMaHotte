@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { ListState, ClientMessage, ServerMessage } from "../shared/types";
 import { applyMessage } from "./reducer";
-import { encryptJson, decryptJson, type EncryptedPayload } from "./crypto";
+import { deriveKey, encryptWithKey, decryptWithKey, type EncryptedPayload } from "./crypto";
 
 interface Env {
   LIST_ROOM: DurableObjectNamespace<ListRoom>;
@@ -21,16 +21,26 @@ type StoredRecord = ListState | ({ encrypted: true } & EncryptedPayload);
 export class ListRoom extends DurableObject<Env> {
   private listState: ListState | null = null;
   private loaded = false;
+  // The list's code never changes for the lifetime of this DO instance (it
+  // *is* the instance's identity, see idFromName in worker/index.ts) — the
+  // derived key is cached here rather than re-hashed + re-imported on every
+  // single persist(), which happens on every mutation.
+  private cryptoKey: CryptoKey | null = null;
+
+  private async getCryptoKey(): Promise<CryptoKey> {
+    if (!this.cryptoKey) {
+      // The code is never in the encrypted payload itself (chicken-and-egg) —
+      // it's the Durable Object's own name.
+      this.cryptoKey = await deriveKey(this.ctx.id.name!);
+    }
+    return this.cryptoKey;
+  }
 
   private async ensureLoaded(): Promise<void> {
     if (this.loaded) return;
     const raw = (await this.ctx.storage.get<StoredRecord>(STORAGE_KEY)) ?? null;
     if (raw && "encrypted" in raw) {
-      // The code is never in the encrypted payload itself (chicken-and-egg) —
-      // it's the Durable Object's own name, since every instance is looked
-      // up via idFromName(code) (see worker/index.ts).
-      const code = this.ctx.id.name!;
-      this.listState = await decryptJson<ListState>(code, raw);
+      this.listState = await decryptWithKey<ListState>(await this.getCryptoKey(), raw);
     } else {
       this.listState = raw;
     }
@@ -142,7 +152,7 @@ export class ListRoom extends DurableObject<Env> {
   private async persist(): Promise<void> {
     if (!this.listState) return;
     this.listState.updatedAt = Date.now();
-    const payload = await encryptJson(this.listState.code, this.listState);
+    const payload = await encryptWithKey(await this.getCryptoKey(), this.listState);
     await this.ctx.storage.put<StoredRecord>(STORAGE_KEY, { encrypted: true, ...payload });
   }
 }
