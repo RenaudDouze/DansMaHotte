@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { applyMessage, nextOrder, validRecipientId, normalizeLink, normalizePrice } from "./reducer";
-import type { ListState } from "../shared/types";
+import { MAX_ITEMS_PER_LIST, MAX_RECIPIENTS_PER_LIST, type Item, type ListState, type Recipient } from "../shared/types";
 
 function makeState(overrides: Partial<ListState> = {}): ListState {
   return {
@@ -12,6 +12,24 @@ function makeState(overrides: Partial<ListState> = {}): ListState {
     updatedAt: 0,
     ...overrides,
   };
+}
+
+function fillerItems(count: number): Item[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `filler-${i}`,
+    name: `Cadeau ${i}`,
+    recipientId: null,
+    checked: false,
+    order: i,
+    createdAt: 0,
+    updatedAt: 0,
+    hasImage: false,
+    imageVersion: 0,
+  }));
+}
+
+function fillerRecipients(count: number): Recipient[] {
+  return Array.from({ length: count }, (_, i) => ({ id: `filler-r${i}`, name: `Personne ${i}`, order: i }));
 }
 
 const NOW = 1_700_000_000_000;
@@ -137,6 +155,13 @@ describe("applyMessage", () => {
       const state = makeState();
       applyMessage(state, { type: "addItem", id: "i1", rawText: "   ", recipientId: null }, NOW);
       expect(state.items).toEqual([]);
+    });
+
+    it("n'ajoute rien au-delà de MAX_ITEMS_PER_LIST cadeaux", () => {
+      const state = makeState({ items: fillerItems(MAX_ITEMS_PER_LIST) });
+      applyMessage(state, { type: "addItem", id: "new", rawText: "En trop", recipientId: null }, NOW);
+      expect(state.items).toHaveLength(MAX_ITEMS_PER_LIST);
+      expect(state.items.some((i) => i.id === "new")).toBe(false);
     });
   });
 
@@ -360,6 +385,13 @@ describe("applyMessage", () => {
       expect(state.recipients).toEqual([{ id: "r1", name: "Marie", order: 0 }]);
     });
 
+    it("addRecipient n'ajoute rien au-delà de MAX_RECIPIENTS_PER_LIST personnes", () => {
+      const state = makeState({ recipients: fillerRecipients(MAX_RECIPIENTS_PER_LIST) });
+      applyMessage(state, { type: "addRecipient", id: "new", name: "En trop" }, NOW);
+      expect(state.recipients).toHaveLength(MAX_RECIPIENTS_PER_LIST);
+      expect(state.recipients.some((r) => r.id === "new")).toBe(false);
+    });
+
     it("renameRecipient renomme, ignore id inconnu et nom blanc", () => {
       const state = makeState({ recipients: [{ id: "r1", name: "Marie", order: 0 }] });
       applyMessage(state, { type: "renameRecipient", id: "r1", name: "Marie-Claire" }, NOW);
@@ -546,6 +578,100 @@ describe("applyMessage", () => {
       );
       expect(state.items.find((i) => i.name === "Sans destinataire")!.recipientId).toBeNull();
       expect(state.items.find((i) => i.name === "Destinataire fantôme")!.recipientId).toBeNull();
+    });
+
+    // Un fichier importé (ou un message importState forgé à la main, voir
+    // src/views/list.ts et worker/reducer.ts) n'est pas soumis aux mêmes
+    // contraintes de forme qu'un champ de formulaire : ces tests couvrent la
+    // normalisation appliquée spécifiquement à ce cas (id, lien, prix).
+    it("mode replace remplace un id dangereux (ou non-string) par un id généré, normalise lien/prix, et remappe recipientId", () => {
+      const state = makeState();
+      const data = {
+        name: "",
+        recipients: [{ id: '"><img src=x onerror=alert(1)>', name: "Marie", order: 0 }],
+        items: [
+          {
+            id: 12345 as unknown as string,
+            name: "Cadeau",
+            recipientId: '"><img src=x onerror=alert(1)>',
+            checked: false,
+            order: 0,
+            createdAt: 0,
+            updatedAt: 0,
+            hasImage: false,
+            imageVersion: 0,
+            link: "exemple.fr",
+            price: 19.9,
+          },
+          {
+            id: "cadeau-2",
+            name: "Cadeau 2",
+            recipientId: "n-existe-pas-dans-le-fichier",
+            checked: false,
+            order: 0,
+            createdAt: 0,
+            updatedAt: 0,
+            hasImage: false,
+            imageVersion: 0,
+            price: -5,
+          },
+        ],
+      };
+      applyMessage(state, { type: "importState", mode: "replace", data }, NOW);
+
+      const marie = state.recipients.find((r) => r.name === "Marie")!;
+      expect(marie.id).not.toBe('"><img src=x onerror=alert(1)>');
+      expect(marie.id).not.toMatch(/[<>"]/);
+
+      const cadeau = state.items.find((i) => i.name === "Cadeau")!;
+      expect(typeof cadeau.id).toBe("string");
+      expect(cadeau.id).not.toBe(12345);
+      // Remappé vers le nouvel id (pas dangereux) du même destinataire importé.
+      expect(cadeau.recipientId).toBe(marie.id);
+      expect(cadeau.link).toBe("https://exemple.fr");
+      expect(cadeau.price).toBe(19.9);
+
+      const cadeau2 = state.items.find((i) => i.name === "Cadeau 2")!;
+      // Référence un destinataire absent du fichier importé : retombe à null.
+      expect(cadeau2.recipientId).toBeNull();
+      // Prix invalide (négatif) : ignoré plutôt que stocké tel quel.
+      expect(cadeau2.price).toBeUndefined();
+    });
+
+    it("mode merge n'ajoute ni destinataire ni cadeau au-delà des plafonds, même si le fichier importé en contient plus", () => {
+      const state = makeState({
+        recipients: fillerRecipients(MAX_RECIPIENTS_PER_LIST),
+        items: fillerItems(MAX_ITEMS_PER_LIST),
+      });
+      applyMessage(
+        state,
+        {
+          type: "importState",
+          mode: "merge",
+          data: {
+            name: "",
+            recipients: [{ id: "new-r", name: "En trop", order: 0 }],
+            items: [
+              {
+                id: "new-i",
+                name: "En trop aussi",
+                recipientId: null,
+                checked: false,
+                order: 0,
+                createdAt: 0,
+                updatedAt: 0,
+                hasImage: false,
+                imageVersion: 0,
+              },
+            ],
+          },
+        },
+        NOW,
+      );
+      expect(state.recipients).toHaveLength(MAX_RECIPIENTS_PER_LIST);
+      expect(state.items).toHaveLength(MAX_ITEMS_PER_LIST);
+      expect(state.recipients.some((r) => r.name === "En trop")).toBe(false);
+      expect(state.items.some((i) => i.name === "En trop aussi")).toBe(false);
     });
   });
 

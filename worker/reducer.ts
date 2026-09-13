@@ -3,6 +3,7 @@
 // runtime (storage, WebSockets, ctx...).
 
 import type { ListState, ClientMessage, Item, Recipient } from "../shared/types";
+import { MAX_NAME_LENGTH, MAX_ITEMS_PER_LIST, MAX_RECIPIENTS_PER_LIST } from "../shared/types";
 
 export function nextOrder(list: { order: number }[]): number {
   return list.reduce((max, x) => Math.max(max, x.order), -1) + 1;
@@ -27,6 +28,16 @@ export function normalizeLink(raw: string): string {
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
+/** Un id importé n'est jamais recopié tel quel s'il ne ressemble pas à un id
+ * généré par l'app (uid() côté client) : cet id est ensuite interpolé sans
+ * échappement dans un attribut HTML (data-id, voir src/views/list.ts), donc
+ * un caractère comme `"` pourrait casser l'attribut. `importState` est le
+ * seul cas où l'id vient d'un fichier/message externe plutôt que d'un champ
+ * de formulaire ; un id déjà bien formé traverse inchangé. */
+function sanitizeId(id: string): string {
+  return typeof id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(id) ? id : crypto.randomUUID();
+}
+
 /** A valid price is always a finite number >= 0, rounded to the cent — an
  * out-of-range value (negative, NaN, infinite) is silently ignored rather
  * than stored, since this is enforced here rather than only client-side (see
@@ -45,13 +56,14 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       return;
 
     case "renameList": {
-      const name = msg.name.trim();
+      const name = msg.name.trim().slice(0, MAX_NAME_LENGTH);
       if (name) state.name = name;
       return;
     }
 
     case "addItem": {
-      const name = msg.rawText.trim();
+      if (state.items.length >= MAX_ITEMS_PER_LIST) return;
+      const name = msg.rawText.trim().slice(0, MAX_NAME_LENGTH);
       if (!name) return;
       const item: Item = {
         id: msg.id,
@@ -72,7 +84,7 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
     case "updateItem": {
       const item = state.items.find((i) => i.id === msg.id);
       if (!item) return;
-      if (msg.name !== undefined) item.name = msg.name;
+      if (msg.name !== undefined) item.name = msg.name.slice(0, MAX_NAME_LENGTH);
       if (msg.recipientId !== undefined) item.recipientId = validRecipientId(state, msg.recipientId);
       if (msg.status !== undefined) {
         item.status = msg.status;
@@ -114,7 +126,8 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
     }
 
     case "addRecipient": {
-      const name = msg.name.trim();
+      if (state.recipients.length >= MAX_RECIPIENTS_PER_LIST) return;
+      const name = msg.name.trim().slice(0, MAX_NAME_LENGTH);
       if (!name) return;
       const recipient: Recipient = { id: msg.id, name, order: nextOrder(state.recipients) };
       state.recipients.push(recipient);
@@ -124,7 +137,7 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
     case "renameRecipient": {
       const recipient = state.recipients.find((r) => r.id === msg.id);
       if (!recipient) return;
-      const name = msg.name.trim();
+      const name = msg.name.trim().slice(0, MAX_NAME_LENGTH);
       if (name) recipient.name = name;
       return;
     }
@@ -167,10 +180,40 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
     }
 
     case "importState": {
+      // Un fichier importé (ou un message importState forgé à la main, ce
+      // format étant atteignable directement en websocket) est la seule
+      // source de cadeaux/personnes qui ne passe pas par un champ de
+      // formulaire validé un par un : on lui applique donc ici les mêmes
+      // normalisations qu'ailleurs (id, lien, prix) plutôt que de recopier
+      // l'objet tel quel.
+      const sanitizeImportedRecipient = (recipient: Recipient): Recipient => ({
+        ...recipient,
+        id: sanitizeId(recipient.id),
+        name: recipient.name.slice(0, MAX_NAME_LENGTH),
+      });
+      const sanitizeImportedItem = (item: Item, recipientId: string | null, order: number): Item => {
+        const sanitized: Item = { ...item, id: sanitizeId(item.id), name: item.name.slice(0, MAX_NAME_LENGTH), recipientId, order };
+        if (typeof sanitized.link === "string") sanitized.link = normalizeLink(sanitized.link);
+        if (typeof sanitized.price === "number") {
+          const price = normalizePrice(sanitized.price);
+          if (price === undefined) delete sanitized.price;
+          else sanitized.price = price;
+        }
+        return sanitized;
+      };
+
       if (msg.mode === "replace") {
-        state.items = msg.data.items;
-        state.recipients = msg.data.recipients;
-        if (msg.data.name) state.name = msg.data.name;
+        // .slice() avant, pas après : tronquer après coup risquerait de
+        // couper un destinataire référencé par un cadeau conservé, laissant
+        // ce cadeau pointer vers un destinataire qui n'existe plus.
+        const recipientsRaw = msg.data.recipients.slice(0, MAX_RECIPIENTS_PER_LIST);
+        const recipients = recipientsRaw.map(sanitizeImportedRecipient);
+        const recipientIdMap = new Map(recipientsRaw.map((r, i) => [r.id, recipients[i].id]));
+        state.recipients = recipients;
+        state.items = msg.data.items
+          .slice(0, MAX_ITEMS_PER_LIST)
+          .map((item, i) => sanitizeImportedItem(item, item.recipientId ? (recipientIdMap.get(item.recipientId) ?? null) : null, i));
+        if (msg.data.name) state.name = msg.data.name.slice(0, MAX_NAME_LENGTH);
       } else {
         const existingRecipientNames = new Map(state.recipients.map((r) => [r.name.toLowerCase(), r.id]));
         const recipientIdMap = new Map<string, string | null>();
@@ -178,22 +221,21 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
           const existingId = existingRecipientNames.get(recipient.name.toLowerCase());
           if (existingId) {
             recipientIdMap.set(recipient.id, existingId);
-          } else {
-            const newRecipient: Recipient = { ...recipient, order: nextOrder(state.recipients) };
+          } else if (state.recipients.length < MAX_RECIPIENTS_PER_LIST) {
+            const newRecipient = sanitizeImportedRecipient({ ...recipient, order: nextOrder(state.recipients) });
             state.recipients.push(newRecipient);
             existingRecipientNames.set(newRecipient.name.toLowerCase(), newRecipient.id);
             recipientIdMap.set(recipient.id, newRecipient.id);
           }
+          // Sinon (plafond atteint, nom inconnu) : ce destinataire importé
+          // est ignoré, ses cadeaux retomberont sans destinataire (recipientId null).
         }
         const existingItemKeys = new Set(state.items.map((i) => i.name.trim().toLowerCase()));
         for (const item of msg.data.items) {
+          if (state.items.length >= MAX_ITEMS_PER_LIST) break;
           if (existingItemKeys.has(item.name.trim().toLowerCase())) continue;
           const mappedRecipient = item.recipientId ? (recipientIdMap.get(item.recipientId) ?? null) : null;
-          state.items.push({
-            ...item,
-            recipientId: mappedRecipient,
-            order: nextOrder(state.items),
-          });
+          state.items.push(sanitizeImportedItem(item, mappedRecipient, nextOrder(state.items)));
         }
       }
       return;

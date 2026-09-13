@@ -32,6 +32,19 @@ export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
  * SVG peut embarquer du script, un risque inutile pour une simple photo. */
 export const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
 
+/** Longueur max d'un nom (liste, cadeau, personne) — tronqué plutôt que
+ * rejeté (même logique que normalizePrice/normalizeLink dans
+ * worker/reducer.ts : corriger plutôt que bloquer), pour qu'une chaîne
+ * démesurée envoyée dans un message forgé ne gonfle pas indéfiniment la
+ * taille de l'état stocké/diffusé à chaque mutation. */
+export const MAX_NAME_LENGTH = 200;
+
+/** Nombre max de cadeaux/personnes par liste, pour la même raison : sans
+ * cette limite, addItem/addRecipient/importState envoyés en boucle (ou un
+ * fichier d'import démesuré) pourraient gonfler une liste sans limite. */
+export const MAX_ITEMS_PER_LIST = 500;
+export const MAX_RECIPIENTS_PER_LIST = 100;
+
 export interface Item {
   id: string;
   name: string;

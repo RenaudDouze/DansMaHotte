@@ -502,12 +502,12 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
               .sort((a, b) => a.order - b.order)
               .map(
                 (r) => `
-              <li data-id="${r.id}">
-                <div class="recipient-row" style="--person-hue: ${resolveRecipientHue(r)}">
+              <li data-id="${escapeHtml(r.id)}">
+                <div class="recipient-row" style="--person-hue: ${escapeHtml(String(resolveRecipientHue(r)))}">
                   <button class="drag-handle recipient-manage-drag-handle" aria-label="Réordonner « ${escapeHtml(r.name)} »">${icons.gripVertical}</button>
-                  <button type="button" class="recipient-dot color-swatch-toggle" data-id="${r.id}" aria-label="Changer la couleur de « ${escapeHtml(r.name)} »" aria-expanded="${openPaletteFor === r.id}"></button>
-                  <span class="recipient-name" data-id="${r.id}">${escapeHtml(r.name)}</span>
-                  <button class="icon-btn" data-action="del" data-id="${r.id}" aria-label="Supprimer">${icons.trash}</button>
+                  <button type="button" class="recipient-dot color-swatch-toggle" data-id="${escapeHtml(r.id)}" aria-label="Changer la couleur de « ${escapeHtml(r.name)} »" aria-expanded="${openPaletteFor === r.id}"></button>
+                  <span class="recipient-name" data-id="${escapeHtml(r.id)}">${escapeHtml(r.name)}</span>
+                  <button class="icon-btn" data-action="del" data-id="${escapeHtml(r.id)}" aria-label="Supprimer">${icons.trash}</button>
                 </div>
                 ${openPaletteFor === r.id ? colorPaletteHtml(r) : ""}
               </li>`,
@@ -878,19 +878,19 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     container.innerHTML = groups
       .map(
         (g) => `
-      <section class="recipient-section${g.id ? " has-color" : ""}" data-recipient-id="${g.id ?? ""}" ${g.id ? `style="--person-hue: ${g.hue}"` : ""}>
+      <section class="recipient-section${g.id ? " has-color" : ""}" data-recipient-id="${escapeHtml(g.id ?? "")}" ${g.id ? `style="--person-hue: ${escapeHtml(String(g.hue))}"` : ""}>
         ${
           g.showHeader
             ? `<header class="recipient-header">
                 ${g.id ? `<button class="drag-handle recipient-drag-handle" aria-label="Réordonner la personne">${icons.gripVertical}</button>` : `<span class="drag-handle-spacer"></span>`}
                 ${g.id ? `<span class="person-dot" aria-hidden="true"></span>` : ""}
-                <span class="person-name" data-id="${g.id ?? ""}">${escapeHtml(g.name)}</span>
+                <span class="person-name" data-id="${escapeHtml(g.id ?? "")}">${escapeHtml(g.name)}</span>
                 ${recipientTotal(g.id) > 0 ? `<span class="recipient-total">${formatPrice(recipientTotal(g.id))}</span>` : ""}
                 <span class="recipient-count">${g.items.filter((i) => !i.checked).length}</span>
               </header>`
             : ""
         }
-        <ul class="item-list" data-recipient-id="${g.id ?? ""}">
+        <ul class="item-list" data-recipient-id="${escapeHtml(g.id ?? "")}">
           ${g.items.map((item) => itemRowHtml(item, code)).join("")}
         </ul>
         ${g.id && g.items.length === 0 ? `<p class="recipient-empty">Aucun cadeau pour l'instant</p>` : ""}
@@ -1104,21 +1104,26 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     // d'une même personne devient sans effet visuel dans ce mode (l'ordre
     // est alors recalculé à chaque rendu).
     const status = statusOf(item);
+    // item.id/item.link ne viennent pas toujours d'un champ de formulaire
+    // (voir importState dans worker/reducer.ts, seul cas où ces valeurs
+    // arrivent d'un fichier externe) : on les échappe donc ici plutôt que de
+    // compter uniquement sur leur normalisation côté serveur.
+    const safeId = escapeHtml(item.id);
     const photoContent = item.hasImage
       ? `<img src="${escapeHtml(itemImageUrl(code, item.id, item.imageVersion))}" alt="" loading="lazy" />`
       : icons.image;
     return `
-      <li class="item ${item.checked ? "checked" : ""}" data-id="${item.id}" style="--status-color: ${GIFT_STATUS_COLORS[status]}">
+      <li class="item ${item.checked ? "checked" : ""}" data-id="${safeId}" style="--status-color: ${GIFT_STATUS_COLORS[status]}">
         <div class="item-swipe-bg" aria-hidden="true">${icons.trash}</div>
         <div class="item-content">
           <button class="drag-handle item-drag-handle" aria-label="Déplacer">${icons.gripVertical}</button>
-          <button type="button" class="item-status" data-id="${item.id}" aria-haspopup="true" aria-expanded="false" aria-label="Statut : ${GIFT_STATUS_LABELS[status]} (cliquer pour changer)">${GIFT_STATUS_LABELS[status]}</button>
-          <span class="item-price ${item.price !== undefined ? "" : "item-price-empty"}" data-id="${item.id}" title="${item.price !== undefined ? "Modifier le prix" : "Ajouter un prix"}">${item.price !== undefined ? formatPrice(item.price) : "€"}</span>
-          <span class="item-name" data-id="${item.id}">${escapeHtml(item.name)}</span>
-          <button type="button" class="item-photo${item.hasImage ? "" : " item-photo-empty"}" data-action="item-photo" data-id="${item.id}" aria-label="${item.hasImage ? `Voir la photo de « ${escapeHtml(item.name)} »` : `Ajouter une photo à « ${escapeHtml(item.name)} »`}">${photoContent}</button>
-          <input type="file" class="item-image-input" data-id="${item.id}" accept="${ALLOWED_IMAGE_TYPES.join(",")}" hidden />
-          <button type="button" class="item-link${item.link ? " item-link-set" : " item-link-empty"}" data-id="${item.id}" aria-haspopup="true" aria-expanded="false" aria-label="${item.link ? `Voir/modifier le lien de « ${escapeHtml(item.name)} »` : `Ajouter un lien à « ${escapeHtml(item.name)} »`}">${icons.link}</button>
-          <button class="icon-btn item-delete" data-action="delete-item" data-id="${item.id}" aria-label="Supprimer">${icons.trash}</button>
+          <button type="button" class="item-status" data-id="${safeId}" aria-haspopup="true" aria-expanded="false" aria-label="Statut : ${GIFT_STATUS_LABELS[status]} (cliquer pour changer)">${GIFT_STATUS_LABELS[status]}</button>
+          <span class="item-price ${item.price !== undefined ? "" : "item-price-empty"}" data-id="${safeId}" title="${item.price !== undefined ? "Modifier le prix" : "Ajouter un prix"}">${item.price !== undefined ? formatPrice(item.price) : "€"}</span>
+          <span class="item-name" data-id="${safeId}">${escapeHtml(item.name)}</span>
+          <button type="button" class="item-photo${item.hasImage ? "" : " item-photo-empty"}" data-action="item-photo" data-id="${safeId}" aria-label="${item.hasImage ? `Voir la photo de « ${escapeHtml(item.name)} »` : `Ajouter une photo à « ${escapeHtml(item.name)} »`}">${photoContent}</button>
+          <input type="file" class="item-image-input" data-id="${safeId}" accept="${ALLOWED_IMAGE_TYPES.join(",")}" hidden />
+          <button type="button" class="item-link${item.link ? " item-link-set" : " item-link-empty"}" data-id="${safeId}" aria-haspopup="true" aria-expanded="false" aria-label="${item.link ? `Voir/modifier le lien de « ${escapeHtml(item.name)} »` : `Ajouter un lien à « ${escapeHtml(item.name)} »`}">${icons.link}</button>
+          <button class="icon-btn item-delete" data-action="delete-item" data-id="${safeId}" aria-label="Supprimer">${icons.trash}</button>
         </div>
       </li>
     `;
@@ -1129,7 +1134,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     // renderRecipients) : plus facile à parcourir dans une liste déroulante
     // qu'à retenir un ordre personnalisé.
     const sorted = [...recipients].sort((a, b) => alnumCompare(a.name, b.name));
-    const optionHtml = (r: Recipient) => `<option value="${r.id}" ${r.id === selectedId ? "selected" : ""}>${escapeHtml(r.name)}</option>`;
+    const optionHtml = (r: Recipient) => `<option value="${escapeHtml(r.id)}" ${r.id === selectedId ? "selected" : ""}>${escapeHtml(r.name)}</option>`;
     return [`<option value="" ${selectedId === null ? "selected" : ""}>Sans destinataire</option>`, sorted.map(optionHtml).join("")].join("");
   }
 

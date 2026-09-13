@@ -68,6 +68,8 @@ function makeEnv(
     assetsFetch?: (request: Request) => Promise<Response> | Response;
     itemImages?: Env["ITEM_IMAGES"];
     imageRateLimiter?: Env["IMAGE_WRITE_RATE_LIMITER"];
+    lookupRateLimiter?: Env["LIST_LOOKUP_RATE_LIMITER"];
+    createRateLimiter?: Env["LIST_CREATE_RATE_LIMITER"];
   } = {},
 ): Env {
   return {
@@ -75,6 +77,8 @@ function makeEnv(
     ASSETS: { fetch: opts.assetsFetch ?? (() => new Response("asset", { status: 200 })) },
     ITEM_IMAGES: opts.itemImages ?? makeItemImages().bucket,
     IMAGE_WRITE_RATE_LIMITER: opts.imageRateLimiter ?? makeRateLimiter(),
+    LIST_LOOKUP_RATE_LIMITER: opts.lookupRateLimiter ?? makeRateLimiter(),
+    LIST_CREATE_RATE_LIMITER: opts.createRateLimiter ?? makeRateLimiter(),
   } as unknown as Env;
 }
 
@@ -139,6 +143,20 @@ describe("POST /api/lists (création)", () => {
     await worker.fetch(req("https://app.example/api/lists", { method: "POST" }), env);
     expect(stateChecks).toBe(2);
   });
+
+  it("renvoie 429 si le rate limiter de création refuse (IP présente), sans appeler le Durable Object", async () => {
+    const env = makeEnv(
+      () => {
+        throw new Error("le Durable Object ne devrait pas être appelé");
+      },
+      { createRateLimiter: makeRateLimiter(false) },
+    );
+    const res = await worker.fetch(
+      req("https://app.example/api/lists", { method: "POST", headers: { "CF-Connecting-IP": "1.2.3.4" } }),
+      env,
+    );
+    expect(res.status).toBe(429);
+  });
 });
 
 describe("GET /api/lists/:code", () => {
@@ -175,9 +193,40 @@ describe("GET /api/lists/:code", () => {
     const res = await worker.fetch(req("https://app.example/api/lists/abcdef", { method: "DELETE" }), env);
     expect(res.status).toBe(404);
   });
+
+  // Le code à 6 caractères est le seul contrôle d'accès d'une liste (voir
+  // README) : cette route (et la websocket ci-dessous) est celle qui
+  // permettrait de le deviner par force brute sans ce rate limiter.
+  it("renvoie 429 si le rate limiter de lookup refuse (IP présente), sans appeler le Durable Object", async () => {
+    const env = makeEnv(
+      () => {
+        throw new Error("le Durable Object ne devrait pas être appelé");
+      },
+      { lookupRateLimiter: makeRateLimiter(false) },
+    );
+    const res = await worker.fetch(
+      req("https://app.example/api/lists/abcdef", { headers: { "CF-Connecting-IP": "1.2.3.4" } }),
+      env,
+    );
+    expect(res.status).toBe(429);
+  });
 });
 
 describe("GET /api/lists/:code/ws", () => {
+  it("renvoie 429 si le rate limiter de lookup refuse (IP présente), sans appeler le Durable Object", async () => {
+    const env = makeEnv(
+      () => {
+        throw new Error("le Durable Object ne devrait pas être appelé");
+      },
+      { lookupRateLimiter: makeRateLimiter(false) },
+    );
+    const res = await worker.fetch(
+      req("https://app.example/api/lists/abcdef/ws", { headers: { Upgrade: "websocket", "CF-Connecting-IP": "1.2.3.4" } }),
+      env,
+    );
+    expect(res.status).toBe(429);
+  });
+
   it("transmet la requête d'origine telle quelle au Durable Object", async () => {
     // A real 101 (WebSocket upgrade) response can only be constructed by the
     // Workers runtime itself — Node's Response constructor rejects it. That
