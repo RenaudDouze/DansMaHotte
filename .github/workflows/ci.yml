@@ -75,6 +75,26 @@ jobs:
           path: playwright-report/
           retention-days: 14
 
+  mutation-testing:
+    name: Mutation testing (logique pure)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mutation-testing/package-lock.json
+      - run: npm ci
+      # Dépendances de Stryker isolées dans leur propre node_modules :
+      # @stryker-mutator/instrumenter dépend de Babel 8, incompatible avec
+      # Babel 7 qu'utilise vite-plugin-pwa (workbox-build) à la racine —
+      # voir mutation-testing/package.json.
+      - run: npm ci --prefix mutation-testing
+      - run: npm run test:mutation
+
   audit:
     name: Audit des dépendances
     runs-on: ubuntu-latest

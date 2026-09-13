@@ -1,0 +1,9 @@
+{
+  "name": "dansmahotte-mutation-testing",
+  "private": true,
+  "description": "Dépendances de Stryker Mutator isolées dans leur propre node_modules : @stryker-mutator/instrumenter dépend de Babel 8, incompatible avec Babel 7 qu'utilise vite-plugin-pwa (workbox-build) à la racine du projet. Invoqué depuis la racine via `npm run test:mutation`, avec stryker.conf.json resté à la racine (chemins mutate relatifs à la racine).",
+  "devDependencies": {
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0"
+  }
+}
