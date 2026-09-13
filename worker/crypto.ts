@@ -11,7 +11,10 @@ export interface EncryptedPayload {
   ciphertext: string;
 }
 
-async function deriveKey(code: string): Promise<CryptoKey> {
+/** Exported so callers that persist frequently for the same code (see
+ * worker/listRoom.ts) can derive it once and reuse the resulting CryptoKey,
+ * instead of re-hashing + re-importing it on every single encrypt/decrypt. */
+export async function deriveKey(code: string): Promise<CryptoKey> {
   const keyMaterial = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(code));
   return crypto.subtle.importKey("raw", keyMaterial, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
@@ -29,18 +32,24 @@ function fromBase64(b64: string): Uint8Array {
   return bytes;
 }
 
-export async function encryptJson(code: string, value: unknown): Promise<EncryptedPayload> {
-  const key = await deriveKey(code);
+export async function encryptWithKey(key: CryptoKey, value: unknown): Promise<EncryptedPayload> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const plaintext = new TextEncoder().encode(JSON.stringify(value));
   const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plaintext);
   return { iv: toBase64(iv), ciphertext: toBase64(new Uint8Array(ciphertext)) };
 }
 
-export async function decryptJson<T>(code: string, payload: EncryptedPayload): Promise<T> {
-  const key = await deriveKey(code);
+export async function decryptWithKey<T>(key: CryptoKey, payload: EncryptedPayload): Promise<T> {
   const iv = fromBase64(payload.iv);
   const ciphertext = fromBase64(payload.ciphertext);
   const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
   return JSON.parse(new TextDecoder().decode(plaintext));
+}
+
+export async function encryptJson(code: string, value: unknown): Promise<EncryptedPayload> {
+  return encryptWithKey(await deriveKey(code), value);
+}
+
+export async function decryptJson<T>(code: string, payload: EncryptedPayload): Promise<T> {
+  return decryptWithKey<T>(await deriveKey(code), payload);
 }
