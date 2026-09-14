@@ -93,6 +93,55 @@ test("supprimer un cadeau demande un second clic au même endroit, puis reste an
   await expect(page.locator(".item .item-name")).toHaveText("Lego");
 });
 
+test("modifier le nom d'un cadeau, d'une personne ou le titre de la liste reste annulable", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  // Titre de la liste.
+  await page.click("#list-title");
+  await page.fill(".list-title .inline-edit", "Nouveau titre");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#list-title")).toHaveText("Nouveau titre");
+  await expect(page.locator("#undo-toast")).toContainText("Liste renommée en « Nouveau titre »");
+  await page.click("#undo-toast button");
+  await expect(page.locator("#list-title")).toHaveText("Liste de cadeaux");
+
+  // Nom d'un cadeau.
+  await page.fill("#add-input", "Lego");
+  await page.click(".add-submit");
+  await expect(page.locator(".item-name")).toHaveText("Lego");
+  await page.click(".item-name");
+  await page.fill(".item-name .inline-edit", "Playmobil");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".item-name")).toHaveText("Playmobil");
+  await expect(page.locator("#undo-toast")).toContainText("« Lego » renommé en « Playmobil »");
+  await page.click("#undo-toast button");
+  await expect(page.locator(".item-name")).toHaveText("Lego");
+
+  // Nom d'une personne, depuis la vue liste.
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-recipients"]');
+  await page.fill("#new-recipient-name", "Marie");
+  await page.click("#new-recipient-form button[type=submit]");
+  await page.keyboard.press("Escape");
+  const personName = page.locator(".person-name", { hasText: "Marie" });
+  await expect(personName).toHaveText("Marie");
+  await personName.click();
+  await page.fill(".person-name .inline-edit", "Marie-Claire");
+  await page.keyboard.press("Enter");
+  await expect(personName).toHaveText("Marie-Claire");
+  await expect(page.locator("#undo-toast")).toContainText("« Marie » renommé en « Marie-Claire »");
+  await page.click("#undo-toast button");
+  await expect(personName).toHaveText("Marie");
+
+  // Valider sans rien changer ne crée pas d'entrée d'annulation superflue.
+  await page.click(".item-name");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#undo-toast")).toHaveCount(0);
+});
+
 test("la recherche filtre les cadeaux et se referme proprement", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");
@@ -576,6 +625,39 @@ test("on peut ajouter, modifier et effacer le prix d'un cadeau, avec les totaux 
   await expect(page.locator(".totals-bar")).toHaveText("Total : 10,00 €");
 });
 
+test("la barre de progression résume les cadeaux par statut, indépendamment de la recherche", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  const progressBar = page.locator("#progress-bar");
+  await expect(progressBar).toBeHidden();
+
+  await page.fill("#add-input", "Lego");
+  await page.click(".add-submit");
+  await page.fill("#add-input", "Livre");
+  await page.click(".add-submit");
+  await expect(page.locator(".item")).toHaveCount(2);
+
+  // Deux cadeaux encore "Idée" : un seul segment.
+  await expect(progressBar).toBeVisible();
+  await expect(progressBar).toHaveAttribute("aria-label", "Idée : 2");
+  await expect(progressBar.locator(".progress-segment")).toHaveCount(1);
+
+  // Un cadeau passe à "Acheté" : deux segments désormais.
+  await page.locator(".item-status").first().click();
+  await page.click('.status-pill[data-status="achete"]');
+  await expect(progressBar).toHaveAttribute("aria-label", "Idée : 1, Acheté : 1");
+  await expect(progressBar.locator(".progress-segment")).toHaveCount(2);
+
+  // La recherche filtre l'affichage des cadeaux mais pas ce résumé global.
+  await page.click("#btn-search");
+  await page.fill("#search-input", "Livre");
+  await expect(page.locator(".item")).toHaveCount(1);
+  await expect(progressBar).toHaveAttribute("aria-label", "Idée : 1, Acheté : 1");
+});
+
 test("le total par destinataire n'apparaît que si l'un de ses cadeaux a un prix, et s'additionne au total général", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");
@@ -709,6 +791,43 @@ test("le tri alphabétique des cadeaux est optionnel et persiste après un recha
   await expect(page.locator(".item-name")).toHaveText(["Bananes", "Chocolat", "Yaourts"]);
   await page.click("#btn-menu");
   await expect(page.locator('[data-action="item-sort"]')).toHaveText("Tri des cadeaux : Alphabétique");
+});
+
+test("le tri par prix classe les cadeaux du moins cher au plus cher, ceux sans prix en dernier", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  for (const name of ["Vélo", "Livre", "Lego"]) {
+    await page.fill("#add-input", name);
+    await page.click(".add-submit");
+  }
+  await expect(page.locator(".item-name")).toHaveText(["Vélo", "Livre", "Lego"]);
+
+  const setPrice = async (name: string, price: string) => {
+    const row = page.locator(".item", { has: page.locator(".item-name", { hasText: name }) });
+    await row.locator(".item-price").click();
+    await page.fill(".item-price .inline-edit", price);
+    await page.keyboard.press("Enter");
+    await expect(row.locator(".item-price")).not.toHaveClass(/item-price-empty/);
+  };
+  await setPrice("Vélo", "50");
+  await setPrice("Lego", "20");
+  // "Livre" reste sans prix : doit finir en dernier, malgré son nom.
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="item-sort"]'); // manuel -> alphabétique
+  await page.click("#btn-menu");
+  await page.click('[data-action="item-sort"]'); // alphabétique -> prix
+  await expect(page.locator(".item-name")).toHaveText(["Lego", "Vélo", "Livre"]);
+
+  // La préférence (personnelle, par appareil) survit à un rechargement.
+  await page.reload();
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+  await expect(page.locator(".item-name")).toHaveText(["Lego", "Vélo", "Livre"]);
+  await page.click("#btn-menu");
+  await expect(page.locator('[data-action="item-sort"]')).toHaveText("Tri des cadeaux : Prix");
 });
 
 test("masquer les cadeaux emballés est optionnel et persiste après un rechargement", async ({ page }) => {

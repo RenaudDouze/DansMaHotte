@@ -1,11 +1,11 @@
-export type ItemSortPreference = "manual" | "alphabetical";
+export type ItemSortPreference = "manual" | "alphabetical" | "price";
 
 const KEY = "dmh:itemSort";
-const NEXT: Record<ItemSortPreference, ItemSortPreference> = { manual: "alphabetical", alphabetical: "manual" };
-const LABEL: Record<ItemSortPreference, string> = { manual: "Manuel", alphabetical: "Alphabétique" };
+const NEXT: Record<ItemSortPreference, ItemSortPreference> = { manual: "alphabetical", alphabetical: "price", price: "manual" };
+const LABEL: Record<ItemSortPreference, string> = { manual: "Manuel", alphabetical: "Alphabétique", price: "Prix" };
 
 function isItemSortPreference(value: unknown): value is ItemSortPreference {
-  return value === "manual" || value === "alphabetical";
+  return value === "manual" || value === "alphabetical" || value === "price";
 }
 
 /** Personal, per-device display preference (like the theme) — never synced

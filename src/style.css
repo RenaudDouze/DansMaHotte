@@ -193,6 +193,22 @@ button:focus-visible {
   margin: 0.4rem 0 0;
 }
 
+/* Répartition des cadeaux par statut, sur toute la liste — voir
+   updateProgress. Masquée tant que la liste est vide. */
+.progress-bar {
+  display: flex;
+  height: 8px;
+  margin: 0.6rem 0 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--checked-bg);
+}
+
+.progress-segment {
+  height: 100%;
+  transition: width 0.2s ease;
+}
+
 /* Somme de tous les cadeaux de la liste — voir updateTotals. Masquée tant
    qu'aucun prix n'est renseigné (pas de "0,00 €" sur une liste qui n'utilise
    pas cette fonctionnalité). */

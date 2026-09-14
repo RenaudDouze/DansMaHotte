@@ -283,6 +283,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     }
     renderRecipients();
     updateTotals();
+    updateProgress();
     checkCelebration();
   }
 
@@ -297,6 +298,30 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     const total = state.items.reduce((sum, i) => sum + (i.price ?? 0), 0);
     el.hidden = total === 0;
     el.textContent = `Total : ${formatPrice(total)}`;
+  }
+
+  /** Répartition des cadeaux par statut, sur l'ensemble de la liste — même
+   * indépendance vis-à-vis de la recherche/masquage que updateTotals
+   * ci-dessus. Masquée tant que la liste est vide (rien à montrer). */
+  function updateProgress(): void {
+    const el = root.querySelector("#progress-bar") as HTMLElement | null;
+    if (!el || !state) return;
+    if (state.items.length === 0) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    const counts = new Map<GiftStatus, number>();
+    for (const item of state.items) {
+      const status = statusOf(item);
+      counts.set(status, (counts.get(status) ?? 0) + 1);
+    }
+    const total = state.items.length;
+    const presentStatuses = GIFT_STATUSES.filter((s) => (counts.get(s) ?? 0) > 0);
+    el.innerHTML = presentStatuses
+      .map((s) => `<span class="progress-segment" style="width: ${((counts.get(s)! / total) * 100).toFixed(2)}%; background: ${GIFT_STATUS_COLORS[s]}"></span>`)
+      .join("");
+    el.setAttribute("aria-label", presentStatuses.map((s) => `${GIFT_STATUS_LABELS[s]} : ${counts.get(s)}`).join(", "));
   }
 
   function checkCelebration(): void {
@@ -374,11 +399,23 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     const titleEl = root.querySelector("#list-title") as HTMLElement | null;
     titleEl?.addEventListener("click", () => {
       if (!state) return;
+      const previousName = state.name;
       startEdit(titleEl, {
-        value: state.name,
+        value: previousName,
         onCommit: (value) => {
-          if (value && state) conn.send({ type: "renameList", name: value });
-          else render();
+          // Remplace directement l'input par le texte plutôt que de compter
+          // sur le prochain render() : updateTitle() ignore justement toute
+          // mise à jour tant qu'un input est présent dans #list-title (pour
+          // ne pas écraser une saisie en cours), donc le tick où ce commit
+          // s'exécute — où l'input est encore là — ne peut jamais déclencher
+          // ce nettoyage lui-même.
+          if (!value || value === previousName) {
+            titleEl.textContent = previousName;
+            return;
+          }
+          titleEl.textContent = value;
+          conn.send({ type: "renameList", name: value });
+          pushUndo(`Liste renommée en « ${value} »`, () => conn.send({ type: "renameList", name: previousName }));
         },
       });
     });
@@ -524,10 +561,14 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       overlay.querySelector(".modal-close")?.addEventListener("click", close);
       overlay.querySelectorAll<HTMLElement>(".recipient-name").forEach((el) => {
         el.addEventListener("click", () => {
+          const previousName = el.textContent || "";
           startEdit(el, {
-            value: el.textContent || "",
+            value: previousName,
             onCommit: (value) => {
-              if (value) conn.send({ type: "renameRecipient", id: el.dataset.id!, name: value });
+              if (!value || value === previousName) return;
+              const id = el.dataset.id!;
+              conn.send({ type: "renameRecipient", id, name: value });
+              pushUndo(`« ${previousName} » renommé en « ${value} »`, () => conn.send({ type: "renameRecipient", id, name: previousName }));
             },
           });
         });
@@ -799,7 +840,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     closeLinkEditor();
 
     const query = searchQuery.trim().toLowerCase();
-    const alphabeticalItems = getItemSortPreference() === "alphabetical";
+    const itemSort = getItemSortPreference();
     const hideChecked = getHideCheckedPreference();
 
     // Un seul passage sur tous les cadeaux plutôt qu'un filter/reduce complet
@@ -825,10 +866,14 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     // de la recherche ou de "masquer les cadeaux emballés" en cours : le budget
     // d'une personne ne doit pas varier selon l'affichage du moment.
     const recipientTotal = (recipientId: string | null): number => totalByRecipient.get(recipientId) ?? 0;
-    const sortItems = (items: Item[]): Item[] =>
-      [...items].sort(
-        (a, b) => Number(a.checked) - Number(b.checked) || (alphabeticalItems ? alnumCompare(a.name, b.name) : a.order - b.order),
-      );
+    // Un cadeau sans prix se retrouve après ceux qui en ont un, en tri par
+    // prix — plutôt que mélangé arbitrairement selon l'ordre d'insertion.
+    const secondarySort = (a: Item, b: Item): number => {
+      if (itemSort === "alphabetical") return alnumCompare(a.name, b.name);
+      if (itemSort === "price") return (a.price ?? Infinity) - (b.price ?? Infinity) || alnumCompare(a.name, b.name);
+      return a.order - b.order;
+    };
+    const sortItems = (items: Item[]): Item[] => [...items].sort((a, b) => Number(a.checked) - Number(b.checked) || secondarySort(a, b));
 
     const recipients = [...state.recipients].sort((a, b) => a.order - b.order);
     type Group = { id: string | null; name: string; items: Item[]; showHeader: boolean; hue: number };
@@ -940,11 +985,17 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       el.addEventListener("click", () => {
         const item = state!.items.find((i) => i.id === el.dataset.id);
         if (!item) return;
+        const previousName = item.name;
         startEdit(el, {
-          value: item.name,
+          value: previousName,
           onCommit: (value) => {
-            if (value) conn.send({ type: "updateItem", id: item.id, name: value });
-            else render();
+            if (!value) {
+              render();
+              return;
+            }
+            if (value === previousName) return;
+            conn.send({ type: "updateItem", id: item.id, name: value });
+            pushUndo(`« ${previousName} » renommé en « ${value} »`, () => conn.send({ type: "updateItem", id: item.id, name: previousName }));
           },
         });
       });
@@ -954,6 +1005,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       el.addEventListener("click", () => {
         const item = state!.items.find((i) => i.id === el.dataset.id);
         if (!item) return;
+        const previousPrice = item.price ?? null;
         startEdit(el, {
           value: item.price !== undefined ? formatPrice(item.price).replace(" €", "") : "",
           placeholder: "Prix en €",
@@ -964,7 +1016,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
               renderRecipients();
               return;
             }
+            if (price === previousPrice) return;
             conn.send({ type: "updateItem", id: item.id, price });
+            pushUndo(`Prix de « ${item.name} » modifié`, () => conn.send({ type: "updateItem", id: item.id, price: previousPrice }));
           },
         });
       });
@@ -973,10 +1027,14 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     container.querySelectorAll<HTMLElement>(".person-name").forEach((el) => {
       if (!el.dataset.id) return;
       el.addEventListener("click", () => {
+        const previousName = el.textContent || "";
         startEdit(el, {
-          value: el.textContent || "",
+          value: previousName,
           onCommit: (value) => {
-            if (value) conn.send({ type: "renameRecipient", id: el.dataset.id!, name: value });
+            if (!value || value === previousName) return;
+            const id = el.dataset.id!;
+            conn.send({ type: "renameRecipient", id, name: value });
+            pushUndo(`« ${previousName} » renommé en « ${value} »`, () => conn.send({ type: "renameRecipient", id, name: previousName }));
           },
         });
       });
@@ -993,10 +1051,10 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
    * entre deux rendus ne change rien à leur comportement — juste beaucoup
    * moins de (dés)abonnements sur une liste très active. */
   function wireRecipientsInteractions(container: HTMLElement): void {
-    // Le glisser-déposer reste actif même en tri alphabétique : il permet
-    // toujours de déplacer un cadeau vers une autre personne. Seul le
-    // repositionnement au sein d'une même personne n'a plus d'effet visuel
-    // durable (le prochain rendu retrie par ordre alphabétique).
+    // Le glisser-déposer reste actif même en tri automatique (alphabétique
+    // ou prix) : il permet toujours de déplacer un cadeau vers une autre
+    // personne. Seul le repositionnement au sein d'une même personne n'a
+    // plus d'effet visuel durable (le prochain rendu retrie automatiquement).
     disposeItemDnd = enableDragReorder(container, {
       containerSelector: ".item-list",
       itemSelector: ".item",
@@ -1098,7 +1156,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function itemRowHtml(item: Item, code: string): string {
-    // La poignée reste utile même en tri alphabétique : elle permet de
+    // La poignée reste utile même en tri automatique : elle permet de
     // déplacer un cadeau vers une autre personne (le seul autre moyen étant
     // de le supprimer puis de le rajouter). Seul le repositionnement au sein
     // d'une même personne devient sans effet visuel dans ce mode (l'ordre
@@ -1175,6 +1233,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         </form>
         <p class="add-form-hint">${privacyHint()}</p>
 
+        <div class="progress-bar" id="progress-bar" role="img" hidden></div>
         <p class="totals-bar" id="totals-bar" hidden></p>
 
         <div id="recipients" class="recipients"></div>
