@@ -80,7 +80,7 @@ Self-contained `openXModal()` functions in `src/components/` (`shareModal.ts`, `
 
 ### Undo
 
-Destructive actions (delete item, clear checked items, delete recipient) push a compensating action onto a client-side undo stack (`pushUndo` in `list.ts`) and show a 5-second-window toast instead of a blocking confirmation dialog. Confirming a destructive action still first requires a second click on the same button within a short window (`src/lib/confirmClick.ts`) — undo is the safety net *after* that.
+Destructive actions (delete item, clear checked items, delete recipient) and text/price edits (list/item/recipient rename, item price) push a compensating action onto a client-side undo stack (`pushUndo` in `list.ts`) and show a 5-second-window toast instead of a blocking confirmation dialog. Edit sites capture the previous value before sending the update and skip the whole round-trip when the committed value is unchanged. Confirming a destructive action still first requires a second click on the same button within a short window (`src/lib/confirmClick.ts`) — undo is the safety net *after* that.
 
 ### Drag & drop, swipe, inline editing
 
