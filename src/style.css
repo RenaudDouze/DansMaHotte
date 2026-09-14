@@ -569,8 +569,9 @@ button:focus-visible {
   border: 1px solid var(--border);
   /* --status-color est fixée par cadeau (voir itemRowHtml) : même variable
      que .item-status, pour un repère de statut visible d'un coup d'œil sur
-     le bord de la ligne. */
-  border-left-width: 3px;
+     le bord de la ligne. Volontairement épais (6px) : plus fin, le repère
+     de couleur passe inaperçu à côté du reste de la ligne. */
+  border-left-width: 6px;
   border-left-color: var(--status-color, var(--border));
   border-radius: 12px;
   padding: 0.5rem 0.5rem;
