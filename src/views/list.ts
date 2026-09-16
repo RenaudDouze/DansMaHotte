@@ -50,6 +50,7 @@ const statusOf = (item: Item): GiftStatus => item.status ?? "idee";
 // visuel immédiat sans avoir à relire le libellé.
 const GIFT_STATUS_COLORS: Record<GiftStatus, string> = {
   idee: "#8d8177",
+  sur: "#c96a2e",
   achete: "#2f9e52",
   commande: "#7c5cbf",
   recu: "#3b6ea5",
@@ -670,7 +671,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     activeStatusPicker = null;
   }
 
-  /** Petit menu flottant listant les 6 statuts, ancré sous le badge cliqué —
+  /** Petit menu flottant listant les 7 statuts, ancré sous le badge cliqué —
    * même principe que les pills de statut d'OnMangeQuoi, adapté en popover
    * plutôt qu'une rangée toujours visible pour rester compact dans une ligne
    * de cadeau. Positionné en `position: fixed` (et non un enfant du `.item`,

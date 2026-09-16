@@ -428,12 +428,12 @@ test("le statut d'un cadeau se choisit dans un petit menu, sans changer l'ordre 
   const livreStatus = livreItem.locator(".item-status");
   await expect(livreStatus).toHaveText("Idée");
 
-  // Cliquer le badge ouvre un menu listant les 6 statuts ; en choisir un le
+  // Cliquer le badge ouvre un menu listant les 7 statuts ; en choisir un le
   // referme et l'applique : ni le cadeau ni sa personne ne bougent, seule
   // son apparence change.
   await livreStatus.click();
   const picker = page.locator(".status-picker");
-  await expect(picker.locator(".status-pill")).toHaveText(["Idée", "Acheté", "Commandé", "Reçu", "À plusieurs", "Emballé"]);
+  await expect(picker.locator(".status-pill")).toHaveText(["Idée", "De sûr", "Acheté", "Commandé", "Reçu", "À plusieurs", "Emballé"]);
   await expect(picker.locator('.status-pill[aria-pressed="true"]')).toHaveText("Idée");
   await picker.locator(".status-pill", { hasText: "Commandé" }).click();
   await expect(picker).toHaveCount(0);

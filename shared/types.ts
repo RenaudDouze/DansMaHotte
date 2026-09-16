@@ -13,12 +13,13 @@ export interface Recipient {
 /** Où en est un cadeau, de l'idée jusqu'à son emballage. "À plusieurs" n'est
  * pas une étape du parcours mais un statut à part : le cadeau est pris en
  * commun avec quelqu'un d'autre. */
-export type GiftStatus = "idee" | "achete" | "commande" | "recu" | "a_plusieurs" | "emballe";
+export type GiftStatus = "idee" | "sur" | "achete" | "commande" | "recu" | "a_plusieurs" | "emballe";
 
-export const GIFT_STATUSES: readonly GiftStatus[] = ["idee", "achete", "commande", "recu", "a_plusieurs", "emballe"];
+export const GIFT_STATUSES: readonly GiftStatus[] = ["idee", "sur", "achete", "commande", "recu", "a_plusieurs", "emballe"];
 
 export const GIFT_STATUS_LABELS: Record<GiftStatus, string> = {
   idee: "Idée",
+  sur: "De sûr",
   achete: "Acheté",
   commande: "Commandé",
   recu: "Reçu",
