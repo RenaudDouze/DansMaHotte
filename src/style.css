@@ -484,6 +484,19 @@ button:focus-visible {
   font-weight: 700;
 }
 
+/* Raccourci d'ajout direct pour cette personne — voir renderRecipients. Même
+   gabarit compact que .item-delete, dans le même esprit de ligne dense. */
+.recipient-add {
+  flex-shrink: 0;
+  font-size: 1rem;
+  padding: 0.3em;
+  color: var(--text-muted);
+}
+
+.recipient-add:hover {
+  color: var(--primary);
+}
+
 .person-dot,
 .recipient-dot {
   width: 0.55em;

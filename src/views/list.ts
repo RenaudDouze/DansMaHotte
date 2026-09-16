@@ -933,6 +933,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
                 <span class="person-name" data-id="${escapeHtml(g.id ?? "")}">${escapeHtml(g.name)}</span>
                 ${recipientTotal(g.id) > 0 ? `<span class="recipient-total">${formatPrice(recipientTotal(g.id))}</span>` : ""}
                 <span class="recipient-count">${g.items.filter((i) => !i.checked).length}</span>
+                <button type="button" class="icon-btn recipient-add" data-id="${escapeHtml(g.id ?? "")}" aria-label="Ajouter un cadeau pour ${escapeHtml(g.name)}">${icons.plus}</button>
               </header>`
             : ""
         }
@@ -943,6 +944,20 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       </section>`,
       )
       .join("");
+
+    // Raccourci pour ajouter directement un cadeau à cette personne : plutôt
+    // que de rouvrir le sélecteur du formulaire d'ajout, on le présélectionne
+    // et on ramène le focus dessus (voir wireAddForm) — le formulaire, lui,
+    // reste unique et en haut de page plutôt que dupliqué par section.
+    container.querySelectorAll<HTMLButtonElement>(".recipient-add").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const recipientSelect = root.querySelector("#add-recipient") as HTMLSelectElement | null;
+        const input = root.querySelector("#add-input") as HTMLInputElement | null;
+        if (recipientSelect) recipientSelect.value = btn.dataset.id ?? "";
+        input?.scrollIntoView({ behavior: "smooth", block: "center" });
+        input?.focus();
+      });
+    });
 
     container.querySelectorAll<HTMLButtonElement>(".item-status").forEach((btn) => {
       btn.addEventListener("click", (e) => {
