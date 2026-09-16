@@ -290,6 +290,30 @@ test("l'ordre manuel des personnes s'affiche dans la liste mais pas dans le menu
   await expect(page.locator(".person-name")).toHaveText(["Zoé", "Abel"]);
 });
 
+test("le bouton + d'une personne présélectionne son nom et place le focus sur le champ d'ajout", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-recipients"]');
+  await page.fill("#new-recipient-name", "Marie");
+  await page.click("#new-recipient-form button[type=submit]");
+  await expect(page.locator(".manage-recipient-list li", { hasText: "Marie" })).toHaveCount(1);
+  await page.click(".modal-close");
+
+  const marieHeader = page.locator(".recipient-header", { has: page.locator(".person-name", { hasText: "Marie" }) });
+  await marieHeader.locator(".recipient-add").click();
+  await expect(page.locator("#add-recipient")).toHaveValue(/.+/);
+  await expect(page.locator("#add-input")).toBeFocused();
+
+  await page.fill("#add-input", "Écharpe");
+  await page.click(".add-submit");
+  const marieSection = page.locator(".recipient-section", { has: page.locator(".person-name", { hasText: "Marie" }) });
+  await expect(marieSection.locator(".item-name")).toHaveText(["Écharpe"]);
+});
+
 test("on peut réordonner les personnes par glisser-déposer dans le gestionnaire", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");
