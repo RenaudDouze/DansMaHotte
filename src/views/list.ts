@@ -10,8 +10,10 @@ import { wireConfirmClick } from "../lib/confirmClick";
 import { enableDragReorder } from "../lib/dnd";
 import { enableSwipeToDelete } from "../lib/swipe";
 import { openShareModal } from "../components/shareModal";
+import { openCompactShareModal } from "../components/compactShareModal";
 import { openAccessibilityModal } from "../components/accessibilityModal";
-import { exportListState, parseImportFile } from "../lib/importExport";
+import { exportListState, parseImportFile, buildCompactShareUrl } from "../lib/importExport";
+import { takePendingImport } from "../lib/pendingImport";
 import { icons } from "../lib/icons";
 import { trapFocus } from "../lib/focusTrap";
 import { resolveRecipientHue } from "../lib/color";
@@ -145,6 +147,13 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   // déjà entièrement emballée) ; sinon, reflète l'état à la dernière vérification.
   let wasFullyChecked: boolean | null = null;
   const conn = new ListConnection(code);
+  // Instantané en attente issu d'un lien compact (voir src/lib/pendingImport.ts) :
+  // uniquement présent juste après la création d'une liste depuis l'accueil
+  // pour ce contenu précis (voir home.ts). conn.send() met en file les
+  // messages tant que la connexion n'est pas encore établie, donc pas besoin
+  // d'attendre onState ici.
+  const pendingImport = takePendingImport();
+  if (pendingImport) conn.send({ type: "importState", mode: "replace", data: pendingImport });
 
   const UNDO_TIMEOUT_MS = 5000;
   const MAX_UNDO_STACK = 10;
@@ -440,6 +449,11 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           if (state) exportListState(state);
         },
         onImportFile: handleImportFile,
+        onCompactShare: () => {
+          if (!state) return;
+          const url = buildCompactShareUrl({ name: state.name, items: state.items, recipients: state.recipients });
+          openCompactShareModal(url, state.name);
+        },
       });
     });
     panel?.querySelector('[data-action="theme"]')?.addEventListener("click", (e) => {

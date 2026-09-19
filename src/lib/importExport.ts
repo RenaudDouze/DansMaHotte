@@ -1,6 +1,9 @@
 import type { ListState } from "../../shared/types";
+import { parseImportPayload, type ImportPayload } from "./importPayload";
+import { encodeCompactShare } from "./compactShare";
+import { appPath } from "./basePath";
 
-export type ImportPayload = Pick<ListState, "name" | "items" | "recipients">;
+export type { ImportPayload };
 
 export function exportListState(state: ListState): void {
   const payload: ImportPayload & { exportedAt: number } = {
@@ -36,18 +39,22 @@ export async function parseImportFile(file: File): Promise<ImportPayload> {
   } catch {
     throw new Error("Ce fichier n'est pas un JSON valide.");
   }
-  if (
-    typeof data !== "object" ||
-    data === null ||
-    !Array.isArray((data as ImportPayload).items) ||
-    !Array.isArray((data as ImportPayload).recipients)
-  ) {
+  try {
+    return parseImportPayload(data);
+  } catch {
     throw new Error("Ce fichier ne ressemble pas à un export de liste de cadeaux.");
   }
-  const parsed = data as Partial<ImportPayload>;
-  return {
-    name: typeof parsed.name === "string" ? parsed.name : "",
-    items: parsed.items ?? [],
-    recipients: parsed.recipients ?? [],
-  };
+}
+
+/** Construit un lien contenant un instantané figé de la liste (nom, cadeaux,
+ * personnes), sans passer par le serveur : ouvrir ce lien propose de créer
+ * une toute nouvelle liste à partir de son contenu (voir home.ts), plutôt
+ * que de donner accès à la liste en direct comme le lien de partage habituel
+ * (voir shareModal.ts). Toujours vers la racine de l'app (appPath("/")), pas
+ * vers /l/CODE : le code de la liste d'origine n'a aucun sens pour la
+ * personne qui reçoit ce lien. */
+export function buildCompactShareUrl(payload: ImportPayload): string {
+  const url = new URL(appPath("/"), location.origin);
+  url.searchParams.set("import", encodeCompactShare(payload));
+  return url.toString();
 }

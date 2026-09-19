@@ -21,7 +21,14 @@ export default defineConfig({
       // in src/lib) is exercised by the Playwright e2e suite instead, not
       // listed here to keep the coverage threshold meaningful rather than
       // diluted by files that were never meant to be unit-tested.
-      include: ["shared/**/*.ts", "worker/**/*.ts", "src/lib/color.ts", "src/lib/sort.ts"],
+      include: [
+        "shared/**/*.ts",
+        "worker/**/*.ts",
+        "src/lib/color.ts",
+        "src/lib/sort.ts",
+        "src/lib/importPayload.ts",
+        "src/lib/compactShare.ts",
+      ],
       exclude: [
         "**/*.test.ts",
         "worker/test/**",

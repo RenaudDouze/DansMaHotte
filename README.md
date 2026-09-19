@@ -29,6 +29,10 @@ de données externe).
   produit), modifiable ou supprimable depuis le même petit popover.
 - **Import / export** au format JSON, avec fusion ou remplacement à
   l'import.
+- **Lien/QR compact** : génère, depuis la modale de partage, un lien (ou QR
+  code) contenant un instantané figé de la liste — sans connexion ni accès à
+  la liste en direct, l'ouvrir propose de créer une toute nouvelle liste à
+  partir de ce contenu.
 - **Hors-ligne minimal** : la dernière version connue de chaque liste est
   gardée en cache local, avec reconnexion automatique.
 - **Installable (PWA)** : manifest + service worker, s'ajoute à l'écran

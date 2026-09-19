@@ -10,6 +10,8 @@
     "worker/**/*.ts",
     "src/lib/color.ts",
     "src/lib/sort.ts",
+    "src/lib/importPayload.ts",
+    "src/lib/compactShare.ts",
     "!**/*.test.ts",
     "!worker/test/**",
     "!worker/listRoom.ts",
