@@ -5,11 +5,65 @@ import { icons } from "../lib/icons";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
 import { privacyHint } from "../lib/privacyHint";
 import { openAccessibilityModal } from "../components/accessibilityModal";
+import { peekPendingImport, clearPendingImport } from "../lib/pendingImport";
+import { trapFocus } from "../lib/focusTrap";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
 
 export function mountHomeView(root: HTMLElement, navigate: (path: string) => void): () => void {
   render();
+  maybeShowPendingImportPrompt();
+
+  function maybeShowPendingImportPrompt(): void {
+    const payload = peekPendingImport();
+    if (!payload) return;
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
+        <button class="icon-btn modal-close" aria-label="Fermer">${icons.close}</button>
+        <h2>Lien de partage compact</h2>
+        <p>Ce lien contient ${payload.items.length} cadeau(x) et ${payload.recipients.length} personne(s). Créer une nouvelle liste à partir de ce contenu ?</p>
+        <div class="stacked-actions">
+          <button class="btn primary" id="pending-import-create">Créer la liste</button>
+          <button class="btn" id="pending-import-cancel">Ignorer</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const releaseFocusTrap = trapFocus(overlay.querySelector(".modal")!);
+    const close = () => {
+      overlay.remove();
+      document.removeEventListener("keydown", onKeydown);
+      releaseFocusTrap();
+    };
+    const dismiss = () => {
+      clearPendingImport();
+      close();
+    };
+    function onKeydown(e: KeyboardEvent) {
+      if (e.key === "Escape") dismiss();
+    }
+    document.addEventListener("keydown", onKeydown);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) dismiss();
+    });
+    overlay.querySelector(".modal-close")?.addEventListener("click", dismiss);
+    overlay.querySelector("#pending-import-cancel")?.addEventListener("click", dismiss);
+    overlay.querySelector("#pending-import-create")?.addEventListener("click", async () => {
+      const btn = overlay.querySelector("#pending-import-create") as HTMLButtonElement;
+      btn.disabled = true;
+      try {
+        const state = await createList(payload.name || "Liste de cadeaux");
+        touchRecentList(state.code, state.name);
+        close();
+        navigate(`/l/${state.code}`);
+      } catch {
+        alert("Impossible de créer la liste. Vérifie ta connexion internet.");
+        btn.disabled = false;
+      }
+    });
+  }
 
   function recentItemHtml(r: RecentList): string {
     return `

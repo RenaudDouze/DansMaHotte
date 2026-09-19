@@ -8,6 +8,7 @@ import { privacyHint } from "../lib/privacyHint";
 export interface ShareModalActions {
   onExport: () => void;
   onImportFile: (file: File) => void;
+  onCompactShare: () => void;
 }
 
 export function openShareModal(code: string, listName: string, actions: ShareModalActions): void {
@@ -27,6 +28,7 @@ export function openShareModal(code: string, listName: string, actions: ShareMod
         ${"share" in navigator ? '<button class="btn primary" id="native-share">Partager…</button>' : ""}
       </div>
       <div class="share-actions share-io-actions">
+        <button class="btn" id="share-compact"><span class="menu-item-icon">${icons.link}</span>Lien compact…</button>
         <button class="btn" id="share-export"><span class="menu-item-icon">${icons.download}</span>Exporter (JSON)</button>
         <button class="btn" id="share-import"><span class="menu-item-icon">${icons.upload}</span>Importer…</button>
       </div>
@@ -75,6 +77,10 @@ export function openShareModal(code: string, listName: string, actions: ShareMod
     }
   });
 
+  overlay.querySelector("#share-compact")?.addEventListener("click", () => {
+    close();
+    actions.onCompactShare();
+  });
   overlay.querySelector("#share-export")?.addEventListener("click", () => {
     close();
     actions.onExport();
