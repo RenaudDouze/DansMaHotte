@@ -21,7 +21,7 @@ import { alnumCompare } from "../lib/sort";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
 import { cycleItemSortPreference, getItemSortPreference, itemSortLabel } from "../lib/itemSortPreference";
 import { getHideCheckedPreference, toggleHideCheckedPreference } from "../lib/hideCheckedPreference";
-import { privacyHint } from "../lib/privacyHint";
+import { PRIVACY_HINT } from "../lib/privacyHint";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
 
@@ -570,7 +570,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
             <input id="new-recipient-name" type="text" placeholder="Prénom" maxlength="40" />
             <button type="submit" class="btn primary">Ajouter</button>
           </form>
-          <p class="add-form-hint">${privacyHint()}</p>
+          <p class="add-form-hint">${PRIVACY_HINT}</p>
         </div>
       `;
       overlay.querySelector(".modal-close")?.addEventListener("click", close);
@@ -1261,14 +1261,14 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
             <button type="submit" class="btn primary add-submit" aria-label="Ajouter">${icons.plus}</button>
           </div>
         </form>
-        <p class="add-form-hint">${privacyHint()}</p>
+        <p class="add-form-hint">${PRIVACY_HINT}</p>
 
         <div class="progress-bar" id="progress-bar" role="img" hidden></div>
         <p class="totals-bar" id="totals-bar" hidden></p>
 
         <div id="recipients" class="recipients"></div>
 
-        <p class="list-privacy-note">${privacyHint()}</p>
+        <p class="list-privacy-note">${PRIVACY_HINT}</p>
       </div>
     `;
   }

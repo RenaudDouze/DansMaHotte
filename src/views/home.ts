@@ -3,7 +3,7 @@ import { getRecentLists, forgetRecentList, touchRecentList, toggleFavoriteList, 
 import { escapeHtml } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
-import { privacyHint } from "../lib/privacyHint";
+import { PRIVACY_HINT } from "../lib/privacyHint";
 import { openAccessibilityModal } from "../components/accessibilityModal";
 import { peekPendingImport, clearPendingImport } from "../lib/pendingImport";
 import { trapFocus } from "../lib/focusTrap";
@@ -97,7 +97,7 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
           <div class="logo">${icons.gift}</div>
           <h1>DansMaHotte</h1>
           <p class="tagline">Une liste de cadeaux de Noël partagée, synchronisée en direct.</p>
-          <p class="tagline privacy-note">${privacyHint()}</p>
+          <p class="tagline privacy-note">${PRIVACY_HINT}</p>
         </header>
 
         ${
@@ -126,7 +126,7 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
             <input id="create-name" type="text" placeholder="Nom de la liste (optionnel)" maxlength="60" />
             <button type="submit" class="btn primary">Créer</button>
           </form>
-          <p class="add-form-hint">${privacyHint()}</p>
+          <p class="add-form-hint">${PRIVACY_HINT}</p>
         </section>
 
         <section class="card">

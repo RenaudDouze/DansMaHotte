@@ -3,6 +3,5 @@
 // les listes sont chiffrées au repos côté serveur (voir
 // worker/crypto.ts), mais le seul contrôle d'accès reste le code à 6
 // caractères — quiconque l'obtient peut voir et modifier la liste.
-export function privacyHint(): string {
-  return "Les données sont chiffrées sur le serveur, mais toute personne avec le code peut voir et modifier la liste normalement.";
-}
+export const PRIVACY_HINT =
+  "Les données sont chiffrées sur le serveur, mais toute personne avec le code peut voir et modifier la liste normalement.";
