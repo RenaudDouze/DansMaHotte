@@ -3,7 +3,7 @@ import { escapeHtml } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { trapFocus } from "../lib/focusTrap";
 import { appPath } from "../lib/basePath";
-import { privacyHint } from "../lib/privacyHint";
+import { PRIVACY_HINT } from "../lib/privacyHint";
 
 export interface ShareModalActions {
   onExport: () => void;
@@ -33,7 +33,7 @@ export function openShareModal(code: string, listName: string, actions: ShareMod
         <button class="btn" id="share-import"><span class="menu-item-icon">${icons.upload}</span>Importer…</button>
       </div>
       <input type="file" id="share-import-file" accept="application/json" hidden />
-      <p class="add-form-hint">${privacyHint()}</p>
+      <p class="add-form-hint">${PRIVACY_HINT}</p>
     </div>
   `;
   document.body.appendChild(overlay);
