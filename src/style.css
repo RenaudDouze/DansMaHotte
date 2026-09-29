@@ -1015,6 +1015,13 @@ button:focus-visible {
   gap: 0.4rem;
 }
 
+/* Personne actuellement masquée de la liste principale (voir
+   hiddenRecipientsPreference) — même traitement visuel que .item.checked :
+   estompée plutôt que retirée, pour rester repérable et démasquable ici. */
+.recipient-row-hidden {
+  opacity: 0.55;
+}
+
 .color-swatch-toggle {
   border: none;
   padding: 0;
