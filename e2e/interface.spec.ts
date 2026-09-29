@@ -759,6 +759,73 @@ test("on peut choisir manuellement la couleur d'une personne, puis revenir à l'
   await expect(row.locator(".recipient-row")).toHaveCSS("--person-hue", autoHue);
 });
 
+test("masquer une personne retire sa section (et ses cadeaux du total), et persiste après un rechargement", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-recipients"]');
+  await page.fill("#new-recipient-name", "Marie");
+  await page.click("#new-recipient-form button[type=submit]");
+  await expect(page.locator(".manage-recipient-list li", { hasText: "Marie" })).toHaveCount(1);
+  await page.fill("#new-recipient-name", "Paul");
+  await page.click("#new-recipient-form button[type=submit]");
+  await expect(page.locator(".manage-recipient-list li", { hasText: "Paul" })).toHaveCount(1);
+  await page.click(".modal-close");
+
+  await page.selectOption("#add-recipient", { label: "Marie" });
+  await page.fill("#add-input", "Bijou");
+  await page.click(".add-submit");
+  await page.selectOption("#add-recipient", { label: "Paul" });
+  await page.fill("#add-input", "Casquette");
+  await page.click(".add-submit");
+  await page.locator(".item-name", { hasText: "Casquette" }).locator("..").locator(".item-price").click();
+  await page.fill(".item-price .inline-edit", "15");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".totals-bar")).toHaveText("Total : 15,00 €");
+
+  // Masquer Marie depuis "Gérer les personnes" : sa section (nom compris)
+  // disparaît de la liste principale, celle de Paul reste inchangée.
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-recipients"]');
+  const marieRow = page.locator(".manage-recipient-list li", { hasText: "Marie" });
+  const toggle = marieRow.locator('[data-action="toggle-hidden"]');
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await page.click(".modal-close");
+
+  await expect(page.locator(".person-name", { hasText: "Marie" })).toHaveCount(0);
+  await expect(page.locator(".person-name", { hasText: "Paul" })).toHaveCount(1);
+  await expect(page.locator(".item-name", { hasText: "Bijou" })).toHaveCount(0);
+  // Le total exclut désormais les cadeaux de la personne masquée.
+  await expect(page.locator(".totals-bar")).toHaveText("Total : 15,00 €");
+
+  // Reste possible de lui ajouter un cadeau même masquée (le sélecteur
+  // liste toujours son nom, sans rien révéler de ses cadeaux existants).
+  await page.selectOption("#add-recipient", { label: "Marie" });
+  await page.fill("#add-input", "Foulard");
+  await page.click(".add-submit");
+  await expect(page.locator(".item-name", { hasText: "Foulard" })).toHaveCount(0);
+
+  // Persiste après rechargement (préférence locale, pas synchronisée).
+  await page.reload();
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+  await expect(page.locator(".person-name", { hasText: "Marie" })).toHaveCount(0);
+
+  // Réafficher rend sa section (et ses deux cadeaux) de nouveau visible.
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-recipients"]');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await page.click(".modal-close");
+  await expect(page.locator(".person-name", { hasText: "Marie" })).toHaveCount(1);
+  await expect(page.locator(".item-name", { hasText: "Bijou" })).toHaveCount(1);
+  await expect(page.locator(".item-name", { hasText: "Foulard" })).toHaveCount(1);
+});
+
 test("« Vider les cadeaux emballés » demande aussi un second clic au même endroit", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");
