@@ -21,6 +21,7 @@ import { alnumCompare } from "../lib/sort";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
 import { cycleItemSortPreference, getItemSortPreference, itemSortLabel } from "../lib/itemSortPreference";
 import { getHideCheckedPreference, toggleHideCheckedPreference } from "../lib/hideCheckedPreference";
+import { isRecipientHidden, toggleRecipientHidden } from "../lib/hiddenRecipientsPreference";
 import { PRIVACY_HINT } from "../lib/privacyHint";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
@@ -47,6 +48,10 @@ const RECIPIENT_COLOR_HUES: readonly { hue: number; name: string }[] = [
 // Item sans status explicite (créé avant l'introduction du champ) : traité
 // comme "Idée", pour ne rien changer à l'ordre existant.
 const statusOf = (item: Item): GiftStatus => item.status ?? "idee";
+
+// Sans destinataire (id null) : jamais masquable, uniquement les personnes
+// explicitement choisies (voir hiddenRecipientsPreference).
+const isRecipientVisible = (recipientId: string | null): boolean => recipientId === null || !isRecipientHidden(recipientId);
 
 // Une couleur par statut, du même esprit que sur OnMangeQuoi : un repère
 // visuel immédiat sans avoir à relire le libellé.
@@ -299,34 +304,39 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
   /** Somme des prix de tous les cadeaux de la liste, tous destinataires
    * confondus — indépendante de la recherche ou de "masquer les cadeaux
-   * emballés" en cours, qui ne concernent que l'affichage des cadeaux. Masquée
-   * tant qu'aucun prix n'est renseigné, pour ne pas afficher "0,00 €" sur
-   * une liste qui n'utilise pas cette fonctionnalité. */
+   * emballés" en cours, qui ne concernent que l'affichage des cadeaux.
+   * Exclut en revanche les cadeaux d'une personne masquée (voir
+   * hiddenRecipientsPreference) : un total qui les compterait quand même
+   * romprait la discrétion recherchée. Masquée tant qu'aucun prix n'est
+   * renseigné, pour ne pas afficher "0,00 €" sur une liste qui n'utilise
+   * pas cette fonctionnalité. */
   function updateTotals(): void {
     const el = root.querySelector("#totals-bar") as HTMLElement | null;
     if (!el || !state) return;
-    const total = state.items.reduce((sum, i) => sum + (i.price ?? 0), 0);
+    const total = state.items.filter((i) => isRecipientVisible(i.recipientId)).reduce((sum, i) => sum + (i.price ?? 0), 0);
     el.hidden = total === 0;
     el.textContent = `Total : ${formatPrice(total)}`;
   }
 
   /** Répartition des cadeaux par statut, sur l'ensemble de la liste — même
    * indépendance vis-à-vis de la recherche/masquage que updateTotals
-   * ci-dessus. Masquée tant que la liste est vide (rien à montrer). */
+   * ci-dessus (personnes masquées comprises). Masquée tant que la liste est
+   * vide (rien à montrer). */
   function updateProgress(): void {
     const el = root.querySelector("#progress-bar") as HTMLElement | null;
     if (!el || !state) return;
-    if (state.items.length === 0) {
+    const items = state.items.filter((i) => isRecipientVisible(i.recipientId));
+    if (items.length === 0) {
       el.hidden = true;
       return;
     }
     el.hidden = false;
     const counts = new Map<GiftStatus, number>();
-    for (const item of state.items) {
+    for (const item of items) {
       const status = statusOf(item);
       counts.set(status, (counts.get(status) ?? 0) + 1);
     }
-    const total = state.items.length;
+    const total = items.length;
     const presentStatuses = GIFT_STATUSES.filter((s) => (counts.get(s) ?? 0) > 0);
     el.innerHTML = presentStatuses
       .map((s) => `<span class="progress-segment" style="width: ${((counts.get(s)! / total) * 100).toFixed(2)}%; background: ${GIFT_STATUS_COLORS[s]}"></span>`)
@@ -552,18 +562,20 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <ul class="manage-recipient-list">
             ${[...state!.recipients]
               .sort((a, b) => a.order - b.order)
-              .map(
-                (r) => `
+              .map((r) => {
+                const hidden = isRecipientHidden(r.id);
+                return `
               <li data-id="${escapeHtml(r.id)}">
-                <div class="recipient-row" style="--person-hue: ${escapeHtml(String(resolveRecipientHue(r)))}">
+                <div class="recipient-row${hidden ? " recipient-row-hidden" : ""}" style="--person-hue: ${escapeHtml(String(resolveRecipientHue(r)))}">
                   <button class="drag-handle recipient-manage-drag-handle" aria-label="Réordonner « ${escapeHtml(r.name)} »">${icons.gripVertical}</button>
                   <button type="button" class="recipient-dot color-swatch-toggle" data-id="${escapeHtml(r.id)}" aria-label="Changer la couleur de « ${escapeHtml(r.name)} »" aria-expanded="${openPaletteFor === r.id}"></button>
                   <span class="recipient-name" data-id="${escapeHtml(r.id)}">${escapeHtml(r.name)}</span>
+                  <button type="button" class="icon-btn" data-action="toggle-hidden" data-id="${escapeHtml(r.id)}" aria-pressed="${hidden}" aria-label="${hidden ? `Réafficher « ${escapeHtml(r.name)} » dans la liste` : `Masquer « ${escapeHtml(r.name)} » de la liste`}">${hidden ? icons.eyeOff : icons.eye}</button>
                   <button class="icon-btn" data-action="del" data-id="${escapeHtml(r.id)}" aria-label="Supprimer">${icons.trash}</button>
                 </div>
                 ${openPaletteFor === r.id ? colorPaletteHtml(r) : ""}
-              </li>`,
-              )
+              </li>`;
+              })
               .join("")}
           </ul>
           <form id="new-recipient-form" class="row">
@@ -603,6 +615,19 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           conn.send({ type: "setRecipientColor", id, color: raw === "auto" ? null : Number(raw) });
           openPaletteFor = null;
           render();
+        });
+      });
+      // Purement local (pas de conn.send) : voir hiddenRecipientsPreference.
+      // Rafraîchit à la fois cette modale (icône/aria-pressed) et la liste
+      // principale derrière elle (section, totaux, barre de progression),
+      // sans attendre un aller-retour serveur qui n'a pas lieu d'être ici.
+      overlay.querySelectorAll<HTMLElement>('[data-action="toggle-hidden"]').forEach((btn) => {
+        btn.addEventListener("click", () => {
+          toggleRecipientHidden(btn.dataset.id!);
+          render();
+          renderRecipients();
+          updateTotals();
+          updateProgress();
         });
       });
       overlay.querySelectorAll<HTMLElement>('[data-action="del"]').forEach((btn) => {
@@ -890,7 +915,11 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     };
     const sortItems = (items: Item[]): Item[] => [...items].sort((a, b) => Number(a.checked) - Number(b.checked) || secondarySort(a, b));
 
-    const recipients = [...state.recipients].sort((a, b) => a.order - b.order);
+    // Une personne masquée (voir hiddenRecipientsPreference) disparaît
+    // entièrement de la liste principale, nom compris — pas seulement ses
+    // cadeaux — pour rester discrète le temps de montrer l'écran à
+    // quelqu'un. Reste gérable (et démasquable) depuis "Gérer les personnes".
+    const recipients = [...state.recipients].filter((r) => isRecipientVisible(r.id)).sort((a, b) => a.order - b.order);
     type Group = { id: string | null; name: string; items: Item[]; showHeader: boolean; hue: number };
     let groups: Group[] = recipients.map((r) => ({
       id: r.id,

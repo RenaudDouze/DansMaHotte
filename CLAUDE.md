@@ -72,7 +72,7 @@ All state-mutation logic lives here as one pure function, `applyMessage(state, m
 
 ### Per-device preferences
 
-Theme, item sort order, hide-checked, and accessibility settings are **personal, per-device** and never part of the synced `ListState` — they live in `localStorage` and are reflected as boolean/enum `data-*` attributes on `document.documentElement`, read purely by CSS. All four follow the same shape (`theme.ts` is the canonical example): `get*Preference()`, `apply*Preference()` (sets the DOM attribute), `set*Preference()` (persists + applies). `applyTheme`/`applyAccessibilityPreference` are called once in `main.ts` before the first render, to avoid a flash of the wrong state.
+Theme, item sort order, hide-checked, hidden recipients, and accessibility settings are **personal, per-device** and never part of the synced `ListState` — they live in `localStorage`. Theme and accessibility are reflected as boolean/enum `data-*` attributes on `document.documentElement`, read purely by CSS (`theme.ts` is the canonical example: `get*Preference()`, `apply*Preference()` sets the DOM attribute, `set*Preference()` persists + applies). Item sort, hide-checked, and hidden recipients (`hiddenRecipientsPreference.ts`) instead filter/sort directly inside `renderRecipients()` (`src/views/list.ts`) — hiding a whole recipient section, like sorting, isn't expressible as a CSS attribute selector. `applyTheme`/`applyAccessibilityPreference` are called once in `main.ts` before the first render, to avoid a flash of the wrong state.
 
 ### Modals
 
@@ -108,4 +108,4 @@ When adding client-side behavior, add/extend an e2e spec in `e2e/`, not a unit t
 
 ## Privacy model
 
-A list's only access control is its 6-character code — no accounts, no passwords. Anyone with the code can view and edit it (surfaced to users via `src/lib/privacyHint.ts`'s reminder text, shown in several places in the UI). List data is encrypted at rest server-side; item photos in R2 are not. Don't weaken or bypass this reminder, and don't add code-adjacent "security" that implies stronger guarantees than this model actually provides.
+A list's only access control is its 6-character code — no accounts, no passwords. Anyone with the code can view and edit it (surfaced to users via `src/lib/privacyHint.ts`'s reminder text, shown in several places in the UI). List data is encrypted at rest server-side; item photos in R2 are not. Don't weaken or bypass this reminder, and don't add code-adjacent "security" that implies stronger guarantees than this model actually provides. "Hidden recipients" (`hiddenRecipientsPreference.ts`) is one such cosmetic-only feature: it hides a person's section from *this device's* screen (e.g. before handing your phone to that very person) but is a display preference, not access control — the data is still fully synced to and visible from any other device with the code.
