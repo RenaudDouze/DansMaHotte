@@ -1,7 +1,7 @@
 # DansMaHotte
 
 Une liste de cadeaux de Noël partagée en temps réel, sur le même modèle que
-[KoiKiManke](https://github.com/RenaudDouze/KoiKiManke) (liste de courses) :
+[KoiKiManke](https://github.com/douzeEnsemble/KoiKiManke) (liste de courses) :
 à héberger entièrement sur Cloudflare (Workers + Durable Objects, sans base
 de données externe).
 
