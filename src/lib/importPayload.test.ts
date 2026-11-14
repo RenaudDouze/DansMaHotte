@@ -16,6 +16,7 @@ describe("parseImportPayload", () => {
 
   it("rejette une valeur qui n'est pas un objet", () => {
     expect(() => parseImportPayload(null)).toThrow(REJECT_MESSAGE);
+    expect(() => parseImportPayload(undefined)).toThrow(REJECT_MESSAGE);
     expect(() => parseImportPayload("texte")).toThrow(REJECT_MESSAGE);
     expect(() => parseImportPayload(42)).toThrow(REJECT_MESSAGE);
   });

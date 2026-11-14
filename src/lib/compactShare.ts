@@ -23,8 +23,10 @@ export function encodeCompactShare(payload: ImportPayload): string {
  * n'y changerait rien, seulement du code mort du point de vue du résultat. */
 export function decodeCompactShare(encoded: string | null | undefined): ImportPayload | null {
   try {
-    const json = LZString.decompressFromEncodedURIComponent(encoded ?? "");
-    return parseImportPayload(JSON.parse(json ?? "null"));
+    // `null`/`undefined` : lz-string renvoie "" puis null, et JSON.parse(null)
+    // vaut null, que parseImportPayload rejette — d'où les assertions.
+    const json = LZString.decompressFromEncodedURIComponent(encoded as string);
+    return parseImportPayload(JSON.parse(json as string));
   } catch {
     return null;
   }

@@ -41,8 +41,8 @@ export default {
     "!shared/types.ts",
   ],
   thresholds: {
-    high: 90,
-    low: 70,
-    break: 70,
+    high: 100,
+    low: 100,
+    break: 100,
   },
 };

@@ -13,7 +13,6 @@ export function nextOrder(list: { order: number }[]): number {
  * trust one carried over from an import, since its recipient may since have
  * been deleted (or, for an import, never existed in this list). */
 export function validRecipientId(state: ListState, id: string | null): string | null {
-  if (id === null) return null;
   return state.recipients.some((r) => r.id === id) ? id : null;
 }
 
@@ -52,8 +51,8 @@ export function normalizePrice(price: number): number | undefined {
 /** Mutates `state` in place to apply one client message. */
 export function applyMessage(state: ListState, msg: ClientMessage, now: number = Date.now()): void {
   switch (msg.type) {
-    case "sync":
-      return;
+    // "sync" ne mute rien : aucun `case` nécessaire, un type non reconnu
+    // sort simplement du switch sans effet.
 
     case "renameList": {
       const name = msg.name.trim().slice(0, MAX_NAME_LENGTH);
@@ -94,13 +93,13 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
         item.checked = msg.status === "emballe";
       }
       if (msg.link !== undefined) item.link = normalizeLink(msg.link);
-      if (msg.price !== undefined) {
-        if (msg.price === null) {
-          delete item.price;
-        } else {
-          const normalized = normalizePrice(msg.price);
-          if (normalized !== undefined) item.price = normalized;
-        }
+      if (msg.price === null) {
+        delete item.price;
+      } else {
+        // Un prix absent (undefined) n'est pas fini : normalizePrice le rejette
+        // et le prix existant reste tel quel.
+        const normalized = normalizePrice(msg.price as number);
+        if (normalized !== undefined) item.price = normalized;
       }
       item.updatedAt = now;
       return;
@@ -194,11 +193,11 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       const sanitizeImportedItem = (item: Item, recipientId: string | null, order: number): Item => {
         const sanitized: Item = { ...item, id: sanitizeId(item.id), name: item.name.slice(0, MAX_NAME_LENGTH), recipientId, order };
         if (typeof sanitized.link === "string") sanitized.link = normalizeLink(sanitized.link);
-        if (typeof sanitized.price === "number") {
-          const price = normalizePrice(sanitized.price);
-          if (price === undefined) delete sanitized.price;
-          else sanitized.price = price;
-        }
+        // Un prix absent ou non numérique (fichier forgé) n'est pas fini :
+        // normalizePrice le rejette, et il est donc retiré plutôt que recopié.
+        const price = normalizePrice(sanitized.price as number);
+        if (price === undefined) delete sanitized.price;
+        else sanitized.price = price;
         return sanitized;
       };
 

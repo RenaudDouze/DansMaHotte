@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { encryptJson, decryptJson } from "./crypto";
 
 describe("encryptJson / decryptJson", () => {
@@ -13,6 +13,13 @@ describe("encryptJson / decryptJson", () => {
     const payload = await encryptJson("CODE01", { name: "Ingrédient très privé" });
     expect(payload.ciphertext).not.toContain("Ingrédient");
     expect(payload.ciphertext).not.toContain("privé");
+  });
+
+  it("dérive une clé non exportable, limitée à chiffrer/déchiffrer", async () => {
+    const spy = vi.spyOn(crypto.subtle, "importKey");
+    await encryptJson("CODE01", { x: 1 });
+    expect(spy).toHaveBeenCalledWith("raw", expect.anything(), { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+    spy.mockRestore();
   });
 
   it("produit un iv différent à chaque appel (jamais réutilisé)", async () => {

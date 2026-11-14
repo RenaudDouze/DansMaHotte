@@ -14,6 +14,12 @@ describe("recipientHue", () => {
     }
   });
 
+  it("donne une valeur précise pour un id connu (hash 31 * h + code)", () => {
+    // "a" -> 97 ; "ab" -> 97 * 31 + 98 = 3105 ; 3105 % 360 = 225
+    expect(recipientHue("a")).toBe(97);
+    expect(recipientHue("ab")).toBe(225);
+  });
+
   it("des ids différents donnent (généralement) des teintes différentes", () => {
     expect(recipientHue("marie")).not.toBe(recipientHue("paul"));
   });
