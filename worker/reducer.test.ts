@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { applyMessage, nextOrder, validRecipientId, normalizeLink, normalizePrice } from "./reducer";
-import { MAX_ITEMS_PER_LIST, MAX_RECIPIENTS_PER_LIST, type Item, type ListState, type Recipient } from "../shared/types";
+import { MAX_ITEMS_PER_LIST, MAX_NAME_LENGTH, MAX_RECIPIENTS_PER_LIST, type Item, type ListState, type Recipient } from "../shared/types";
 
 function makeState(overrides: Partial<ListState> = {}): ListState {
   return {
@@ -32,6 +32,21 @@ function fillerRecipients(count: number): Recipient[] {
   return Array.from({ length: count }, (_, i) => ({ id: `filler-r${i}`, name: `Personne ${i}`, order: i }));
 }
 
+function makeItem(overrides: Partial<Item> = {}): Item {
+  return {
+    id: "i1",
+    name: "Cadeau",
+    recipientId: null,
+    checked: false,
+    order: 0,
+    createdAt: 0,
+    updatedAt: 0,
+    hasImage: false,
+    imageVersion: 0,
+    ...overrides,
+  };
+}
+
 const NOW = 1_700_000_000_000;
 
 describe("nextOrder", () => {
@@ -40,6 +55,14 @@ describe("nextOrder", () => {
   });
   it("vaut max(order) + 1 sinon", () => {
     expect(nextOrder([{ order: 0 }, { order: 5 }, { order: 2 }])).toBe(6);
+  });
+});
+
+describe("validRecipientId (suite)", () => {
+  it("renvoie null pour un id inconnu même quand d'autres personnes existent", () => {
+    const state = makeState({ recipients: [{ id: "r1", name: "Marie", order: 0 }] });
+    expect(validRecipientId(state, "nope")).toBeNull();
+    expect(validRecipientId(state, "r1")).toBe("r1");
   });
 });
 
@@ -79,6 +102,12 @@ describe("normalizeLink", () => {
   });
 });
 
+describe("normalizeLink (ancrage)", () => {
+  it("ne reconnaît le schéma qu'en début de lien", () => {
+    expect(normalizeLink("monsite.fr/?u=http://x")).toBe("https://monsite.fr/?u=http://x");
+  });
+});
+
 describe("normalizePrice", () => {
   it("arrondit au centime", () => {
     expect(normalizePrice(19.999)).toBe(20);
@@ -103,6 +132,50 @@ describe("applyMessage", () => {
     const before = JSON.stringify(state);
     applyMessage(state, { type: "sync" }, NOW);
     expect(JSON.stringify(state)).toBe(before);
+  });
+
+  describe("troncatures et champs optionnels", () => {
+    it("renameList et addItem tronquent à MAX_NAME_LENGTH", () => {
+      const state = makeState();
+      applyMessage(state, { type: "renameList", name: "n".repeat(MAX_NAME_LENGTH + 5) }, NOW);
+      expect(state.name).toBe("n".repeat(MAX_NAME_LENGTH));
+      applyMessage(state, { type: "addItem", id: "i1", rawText: "c".repeat(MAX_NAME_LENGTH + 5), recipientId: null }, NOW);
+      expect(state.items[0].name).toBe("c".repeat(MAX_NAME_LENGTH));
+    });
+
+    it("updateItem tronque le nom et ne touche pas aux champs absents du message", () => {
+      const state = makeState({
+        recipients: [{ id: "r1", name: "Marie", order: 0 }],
+        items: [makeItem({ id: "i1", recipientId: "r1", price: 12.5 })],
+      });
+      applyMessage(state, { type: "updateItem", id: "i1", name: "x".repeat(MAX_NAME_LENGTH + 5) }, NOW);
+      expect(state.items[0].name).toBe("x".repeat(MAX_NAME_LENGTH));
+      expect(state.items[0].recipientId).toBe("r1");
+      expect(state.items[0].price).toBe(12.5);
+    });
+
+    it("updateItem change la personne (id valide), l'efface (null) ou la rejette (id inconnu)", () => {
+      const state = makeState({
+        recipients: [{ id: "r1", name: "Marie", order: 0 }],
+        items: [makeItem({ id: "i1" })],
+      });
+      applyMessage(state, { type: "updateItem", id: "i1", recipientId: "r1" }, NOW);
+      expect(state.items[0].recipientId).toBe("r1");
+      applyMessage(state, { type: "updateItem", id: "i1", recipientId: "nope" }, NOW);
+      expect(state.items[0].recipientId).toBeNull();
+    });
+
+    it("updateItem modifie le bon cadeau parmi plusieurs", () => {
+      const state = makeState({ items: [makeItem({ id: "i1", name: "A" }), makeItem({ id: "i2", name: "B" })] });
+      applyMessage(state, { type: "updateItem", id: "i2", name: "B2" }, NOW);
+      expect(state.items.map((i) => i.name)).toEqual(["A", "B2"]);
+    });
+
+    it("setItemImage ne modifie que le cadeau visé", () => {
+      const state = makeState({ items: [makeItem({ id: "i1" }), makeItem({ id: "i2" })] });
+      applyMessage(state, { type: "setItemImage", id: "i2", hasImage: true }, NOW);
+      expect(state.items.map((i) => i.hasImage)).toEqual([false, true]);
+    });
   });
 
   describe("renameList", () => {
@@ -385,6 +458,14 @@ describe("applyMessage", () => {
       expect(state.recipients).toEqual([{ id: "r1", name: "Marie", order: 0 }]);
     });
 
+    it("addRecipient et renameRecipient tronquent le nom à MAX_NAME_LENGTH", () => {
+      const state = makeState();
+      applyMessage(state, { type: "addRecipient", id: "r1", name: "x".repeat(MAX_NAME_LENGTH + 50) }, NOW);
+      expect(state.recipients[0].name).toHaveLength(MAX_NAME_LENGTH);
+      applyMessage(state, { type: "renameRecipient", id: "r1", name: "y".repeat(MAX_NAME_LENGTH + 50) }, NOW);
+      expect(state.recipients[0].name).toBe("y".repeat(MAX_NAME_LENGTH));
+    });
+
     it("addRecipient n'ajoute rien au-delà de MAX_RECIPIENTS_PER_LIST personnes", () => {
       const state = makeState({ recipients: fillerRecipients(MAX_RECIPIENTS_PER_LIST) });
       applyMessage(state, { type: "addRecipient", id: "new", name: "En trop" }, NOW);
@@ -404,14 +485,19 @@ describe("applyMessage", () => {
 
     it("deleteRecipient retire le destinataire, déplace ses cadeaux vers null, laisse le reste intact", () => {
       const state = makeState({
-        recipients: [{ id: "r1", name: "Marie", order: 0 }],
+        recipients: [
+          { id: "r1", name: "Marie", order: 0 },
+          { id: "r2", name: "Paul", order: 1 },
+        ],
         items: [
           { id: "i1", name: "Lego", recipientId: "r1", checked: false, order: 0, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
           { id: "i2", name: "Livre", recipientId: null, checked: false, order: 1, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
+          { id: "i3", name: "Puzzle", recipientId: "r2", checked: false, order: 2, createdAt: 0, updatedAt: 0, hasImage: false, imageVersion: 0 },
         ],
       });
       applyMessage(state, { type: "deleteRecipient", id: "r1" }, NOW);
-      expect(state.recipients).toEqual([]);
+      expect(state.items.find((i) => i.id === "i3")!.recipientId).toBe("r2");
+      expect(state.recipients).toEqual([{ id: "r2", name: "Paul", order: 1 }]);
       expect(state.items.find((i) => i.id === "i1")!.recipientId).toBeNull();
       expect(state.items.find((i) => i.id === "i2")!.recipientId).toBeNull();
     });
@@ -449,6 +535,12 @@ describe("applyMessage", () => {
         expect(state.recipients[0].color).toBeUndefined();
       });
 
+      it("accepte la teinte 0 (borne basse incluse)", () => {
+        const state = makeState({ recipients: [{ id: "r1", name: "Marie", order: 0 }] });
+        applyMessage(state, { type: "setRecipientColor", id: "r1", color: 0 }, NOW);
+        expect(state.recipients[0].color).toBe(0);
+      });
+
       it("ignore une teinte hors de [0, 360[ ou non entière", () => {
         const state = makeState({ recipients: [{ id: "r1", name: "Marie", order: 0 }] });
         applyMessage(state, { type: "setRecipientColor", id: "r1", color: -1 }, NOW);
@@ -481,6 +573,103 @@ describe("applyMessage", () => {
       const state = makeState({ name: "Ancienne" });
       applyMessage(state, { type: "importState", mode: "replace", data: { name: "", items: [], recipients: [] } }, NOW);
       expect(state.name).toBe("Ancienne");
+    });
+
+    it("remplace tout id importé qui n'est pas strictement [A-Za-z0-9_-]{1,64}", () => {
+      const bad = ["ok id!", "!abc", "abc!", "a".repeat(65), ""];
+      const state = makeState();
+      const data = { name: "", recipients: [], items: bad.map((id, i) => makeItem({ id, name: `c${i}` })) };
+      applyMessage(state, { type: "importState", mode: "replace", data }, NOW);
+      for (const item of state.items) {
+        expect(bad).not.toContain(item.id);
+        expect(item.id).toMatch(/^[A-Za-z0-9_-]{1,64}$/);
+      }
+    });
+
+    it("mode replace tronque le nom de liste importé et plafonne à MAX_RECIPIENTS_PER_LIST personnes", () => {
+      const state = makeState();
+      const data = {
+        name: "L".repeat(MAX_NAME_LENGTH + 5),
+        recipients: fillerRecipients(MAX_RECIPIENTS_PER_LIST + 3),
+        items: [],
+      };
+      applyMessage(state, { type: "importState", mode: "replace", data }, NOW);
+      expect(state.name).toBe("L".repeat(MAX_NAME_LENGTH));
+      expect(state.recipients).toHaveLength(MAX_RECIPIENTS_PER_LIST);
+    });
+
+    it("mode merge : deux personnes importées de même nom (casse différente) n'en font qu'une", () => {
+      const state = makeState();
+      const data = {
+        name: "",
+        recipients: [
+          { id: "a", name: "Marie", order: 0 },
+          { id: "b", name: "marie", order: 1 },
+        ],
+        items: [makeItem({ id: "i1", name: "Lego", recipientId: "b" })],
+      };
+      applyMessage(state, { type: "importState", mode: "merge", data }, NOW);
+      expect(state.recipients).toHaveLength(1);
+      expect(state.items[0].recipientId).toBe(state.recipients[0].id);
+    });
+
+    it("mode merge : ignore un cadeau importé dont le nom ne diffère que par des espaces autour", () => {
+      const state = makeState({ items: [makeItem({ id: "e1", name: "Livre" })] });
+      const data = { name: "", recipients: [], items: [makeItem({ id: "i1", name: "  livre  " })] };
+      applyMessage(state, { type: "importState", mode: "merge", data }, NOW);
+      expect(state.items).toHaveLength(1);
+    });
+
+    it("mode replace tronque les noms de personne et de cadeau à MAX_NAME_LENGTH", () => {
+      const state = makeState();
+      const data = {
+        name: "",
+        recipients: [{ id: "r1", name: "p".repeat(MAX_NAME_LENGTH + 10), order: 0 }],
+        items: [makeItem({ id: "i1", name: "c".repeat(MAX_NAME_LENGTH + 10) })],
+      };
+      applyMessage(state, { type: "importState", mode: "replace", data }, NOW);
+      expect(state.recipients[0].name).toBe("p".repeat(MAX_NAME_LENGTH));
+      expect(state.items[0].name).toBe("c".repeat(MAX_NAME_LENGTH));
+    });
+
+    it("mode replace retire un prix absent ou non numérique au lieu de le recopier", () => {
+      const state = makeState();
+      const data = {
+        name: "",
+        recipients: [],
+        items: [
+          makeItem({ id: "i1", name: "Sans prix" }),
+          makeItem({ id: "i2", name: "Prix texte", price: "12" as unknown as number }),
+        ],
+      };
+      applyMessage(state, { type: "importState", mode: "replace", data }, NOW);
+      expect(state.items.map((i) => "price" in i)).toEqual([false, false]);
+    });
+
+    it("mode replace ne garde que MAX_ITEMS_PER_LIST cadeaux", () => {
+      const state = makeState();
+      const items = fillerItems(MAX_ITEMS_PER_LIST + 5);
+      applyMessage(state, { type: "importState", mode: "replace", data: { name: "", recipients: [], items } }, NOW);
+      expect(state.items).toHaveLength(MAX_ITEMS_PER_LIST);
+    });
+
+    it("mode merge rattache un cadeau importé à la personne déjà présente du même nom", () => {
+      const state = makeState({ recipients: [{ id: "r-local", name: "Marie", order: 0 }] });
+      const data = {
+        name: "",
+        recipients: [{ id: "r-import", name: "marie", order: 0 }],
+        items: [makeItem({ id: "i1", name: "Lego", recipientId: "r-import" })],
+      };
+      applyMessage(state, { type: "importState", mode: "merge", data }, NOW);
+      expect(state.recipients).toHaveLength(1);
+      expect(state.items[0].recipientId).toBe("r-local");
+    });
+
+    it("mode merge compare les noms de cadeaux sans tenir compte des espaces autour, y compris côté existant", () => {
+      const state = makeState({ items: [makeItem({ id: "e1", name: "  Livre  " })] });
+      const data = { name: "", recipients: [], items: [makeItem({ id: "i1", name: "livre" })] };
+      applyMessage(state, { type: "importState", mode: "merge", data }, NOW);
+      expect(state.items).toHaveLength(1);
     });
 
     it("mode merge fusionne les destinataires par nom (insensible à la casse) sans dupliquer", () => {
@@ -720,6 +909,14 @@ describe("applyMessage", () => {
       applyMessage(state, { type: "restoreRecipient", recipient, itemIds: ["i1"] }, NOW);
       expect(state.recipients).toEqual([recipient]);
       expect(state.items[0].recipientId).toBe("r1");
+    });
+
+    it("recrée le destinataire même quand d'autres personnes existent déjà", () => {
+      const other = { id: "r2", name: "Paul", order: 0 };
+      const recipient = { id: "r1", name: "Marie", order: 1 };
+      const state = makeState({ recipients: [other] });
+      applyMessage(state, { type: "restoreRecipient", recipient, itemIds: [] }, NOW);
+      expect(state.recipients).toEqual([other, recipient]);
     });
 
     it("ne recrée pas le destinataire s'il existe déjà (idempotent)", () => {

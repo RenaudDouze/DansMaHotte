@@ -32,7 +32,7 @@ function generateCode(length = 6): string {
 }
 
 function normalizeCode(code: string): string {
-  return code.trim().toUpperCase();
+  return code.toUpperCase();
 }
 
 // Autorise l'appel depuis une origine différente (client servi par GitHub
@@ -163,14 +163,15 @@ export default {
       const stub = env.LIST_ROOM.get(env.LIST_ROOM.idFromName(code));
 
       if (request.method === "PUT") {
-        const contentType = request.headers.get("content-type") ?? "";
+        // Absent (null) : jamais dans ALLOWED_IMAGE_TYPES, donc rejeté ci-dessous.
+        const contentType = request.headers.get("content-type") as string;
         if (!(ALLOWED_IMAGE_TYPES as readonly string[]).includes(contentType)) {
           return jsonError("Format d'image non supporté.", 415);
         }
         // Vérifie d'abord l'en-tête (rejet rapide sans lire le corps), puis
         // la taille réelle une fois lue : l'en-tête n'est qu'une déclaration
         // du client, pas une garantie.
-        const declaredLength = Number(request.headers.get("content-length") ?? "0");
+        const declaredLength = Number(request.headers.get("content-length"));
         if (declaredLength > MAX_IMAGE_BYTES) {
           return jsonError("Image trop volumineuse (5 Mo max).", 413);
         }

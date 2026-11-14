@@ -159,6 +159,22 @@ describe("POST /api/lists (création)", () => {
   });
 });
 
+describe("routage de /api/lists", () => {
+  const unexpected: FakeHandler = () => {
+    throw new Error("le Durable Object ne devrait pas être appelé");
+  };
+
+  it("ne crée pas de liste sur un GET /api/lists", async () => {
+    const res = await worker.fetch(req("https://app.example/api/lists"), makeEnv(unexpected));
+    expect(res.status).toBe(404);
+  });
+
+  it("ne crée pas de liste sur un POST vers un autre chemin", async () => {
+    const res = await worker.fetch(req("https://app.example/autre", { method: "POST" }), makeEnv(unexpected));
+    expect(await res.text()).toBe("asset");
+  });
+});
+
 describe("GET /api/lists/:code", () => {
   it("renvoie l'état d'une liste existante", async () => {
     const handler: FakeHandler = () => Response.json({ ...emptyListState("ABCDEF"), name: "Cadeaux" });
@@ -209,6 +225,7 @@ describe("GET /api/lists/:code", () => {
       env,
     );
     expect(res.status).toBe(429);
+    expect((await readJson(res)).error).toBe("Trop de tentatives, réessaie dans une minute.");
   });
 });
 
@@ -457,5 +474,195 @@ describe("routes non gérées", () => {
     const res = await worker.fetch(request, env);
     expect(assetsFetch).toHaveBeenCalledWith(request);
     expect(await res.text()).toBe("served:/l/ABCDEF");
+  });
+});
+
+describe("contrat des requêtes envoyées au Durable Object et des réponses", () => {
+  const MSG_429 = "Trop de tentatives, réessaie dans une minute.";
+  const PNG = { "content-type": "image/png" };
+
+  interface Call {
+    code: string;
+    url: string;
+    method?: string;
+    body?: unknown;
+    contentType?: string | null;
+  }
+
+  function recorder(respond: (code: string, url: string) => Response = (code) => Response.json(emptyListState(code))) {
+    const calls: Call[] = [];
+    const handler: FakeHandler = (code, input, init) => {
+      const url = typeof input === "string" ? input : input.url;
+      const headers = new Headers(init?.headers);
+      calls.push({
+        code,
+        url,
+        method: init?.method,
+        body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+        contentType: headers.get("content-type"),
+      });
+      return respond(code, url);
+    };
+    return { calls, handler };
+  }
+
+  it("crée une liste avec un code de 6 caractères lisibles et le transmet à /init en JSON", async () => {
+    const { calls, handler } = recorder((code, url) =>
+      url.endsWith("/state") ? new Response("nope", { status: 404 }) : Response.json({ ...emptyListState(code), name: "Mes cadeaux" }),
+    );
+    const res = await worker.fetch(
+      req("https://app.example/api/lists", { method: "POST", body: JSON.stringify({ name: "Mes cadeaux" }) }),
+      makeEnv(handler),
+    );
+    const init = calls.find((c) => c.url === "https://list.internal/init")!;
+    expect(init.method).toBe("POST");
+    expect(init.contentType).toBe("application/json");
+    expect(init.code).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
+    expect(init.body).toEqual({ code: init.code, name: "Mes cadeaux" });
+    expect(res.headers.get("content-type")).toBe("application/json");
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+  });
+
+  it("vérifie la disponibilité du code via /state avant de créer", async () => {
+    const { calls, handler } = recorder((code, url) =>
+      url.endsWith("/state") ? new Response("nope", { status: 404 }) : Response.json(emptyListState(code)),
+    );
+    await worker.fetch(req("https://app.example/api/lists", { method: "POST" }), makeEnv(handler));
+    expect(calls[0].url).toBe("https://list.internal/state");
+  });
+
+  it("transmet la clé IP aux rate limiters", async () => {
+    const limit = vi.fn(async () => ({ success: true }));
+    const limiter = { limit } as unknown as Env["LIST_CREATE_RATE_LIMITER"];
+    const { handler } = recorder((code, url) =>
+      url.endsWith("/state") ? new Response("nope", { status: 404 }) : Response.json(emptyListState(code)),
+    );
+    await worker.fetch(
+      req("https://app.example/api/lists", { method: "POST", headers: { "CF-Connecting-IP": "9.9.9.9" } }),
+      makeEnv(handler, { createRateLimiter: limiter }),
+    );
+    expect(limit).toHaveBeenCalledWith({ key: "9.9.9.9" });
+  });
+
+  it("répond 429 avec le message attendu à la création", async () => {
+    const env = makeEnv(() => Response.json({}), { createRateLimiter: makeRateLimiter(false) });
+    const res = await worker.fetch(
+      req("https://app.example/api/lists", { method: "POST", headers: { "CF-Connecting-IP": "1.2.3.4" } }),
+      env,
+    );
+    expect(await readJson(res)).toEqual({ error: MSG_429 });
+    expect(res.headers.get("content-type")).toBe("application/json");
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+  });
+
+  it("répond au préflight CORS sous /api/ seulement", async () => {
+    const env = makeEnv(() => Response.json({}));
+    const api = await worker.fetch(req("https://app.example/api/lists", { method: "OPTIONS" }), env);
+    expect(api.status).toBe(204);
+    expect(api.headers.get("access-control-allow-methods")).toBe("GET, POST, PUT, DELETE, OPTIONS");
+    const other = await worker.fetch(req("https://app.example/page", { method: "OPTIONS" }), env);
+    expect(await other.text()).toBe("asset");
+  });
+
+  it("ignore les chemins qui contiennent une route sans la commencer", async () => {
+    const { calls, handler } = recorder();
+    const env = makeEnv(handler);
+    for (const path of ["/x/api/lists/ABCDEF", "/x/api/lists/ABCDEF/items/i1/image"]) {
+      const res = await worker.fetch(req(`https://app.example${path}`), env);
+      expect(await res.text()).toBe("asset");
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("lit l'état via /state et le renvoie en JSON avec CORS", async () => {
+    const { calls, handler } = recorder();
+    const res = await worker.fetch(req("https://app.example/api/lists/abcdef"), makeEnv(handler));
+    expect(calls).toEqual([expect.objectContaining({ code: "ABCDEF", url: "https://list.internal/state" })]);
+    expect(res.headers.get("content-type")).toBe("application/json");
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+  });
+
+  it("répond 429 en texte sur la route WebSocket limitée", async () => {
+    const env = makeEnv(() => Response.json({}), { lookupRateLimiter: makeRateLimiter(false) });
+    const res = await worker.fetch(
+      req("https://app.example/api/lists/abcdef/ws", { headers: { Upgrade: "websocket", "CF-Connecting-IP": "1.2.3.4" } }),
+      env,
+    );
+    expect(await res.text()).toBe(MSG_429);
+  });
+
+  it("ne traite pas un chemin d'image qui a un suffixe en trop", async () => {
+    const res = await worker.fetch(req("https://app.example/api/lists/ABCDEF/items/i1/image/extra", { method: "PATCH" }), makeEnv(() => Response.json({})));
+    expect(res.status).toBe(404);
+  });
+
+  it("GET image : 404 « Not found » si l'image n'existe pas", async () => {
+    const res = await worker.fetch(req("https://app.example/api/lists/ABCDEF/items/i1/image"), makeEnv(() => Response.json({})));
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe("Not found");
+  });
+
+  it("PUT image : refuse un type absent ou non autorisé avec le message attendu", async () => {
+    const env = makeEnv(() => Response.json({}));
+    const url = "https://app.example/api/lists/ABCDEF/items/i1/image";
+    for (const headers of [{} as Record<string, string>, { "content-type": "text/html" }]) {
+      const res = await worker.fetch(req(url, { method: "PUT", headers, body: new Uint8Array([1]) }), env);
+      expect(res.status).toBe(415);
+      expect((await readJson(res)).error).toBe("Format d'image non supporté.");
+    }
+  });
+
+  it("PUT image : la limite de taille est de MAX_IMAGE_BYTES inclus, déclarée ou réelle", async () => {
+    const { MAX_IMAGE_BYTES } = await import("../shared/types");
+    const url = "https://app.example/api/lists/ABCDEF/items/i1/image";
+    const { handler } = recorder();
+    const env = () => makeEnv(handler);
+
+    const declaredOk = await worker.fetch(
+      req(url, { method: "PUT", headers: { ...PNG, "content-length": String(MAX_IMAGE_BYTES) }, body: new Uint8Array([1]) }),
+      env(),
+    );
+    expect(declaredOk.status).toBe(200);
+
+    const declaredTooBig = await worker.fetch(
+      req(url, { method: "PUT", headers: { ...PNG, "content-length": String(MAX_IMAGE_BYTES + 1) }, body: new Uint8Array([1]) }),
+      env(),
+    );
+    expect(declaredTooBig.status).toBe(413);
+    expect((await readJson(declaredTooBig)).error).toBe("Image trop volumineuse (5 Mo max).");
+
+    const exact = await worker.fetch(req(url, { method: "PUT", headers: PNG, body: new Uint8Array(MAX_IMAGE_BYTES) }), env());
+    expect(exact.status).toBe(200);
+
+    const tooBig = await worker.fetch(req(url, { method: "PUT", headers: PNG, body: new Uint8Array(MAX_IMAGE_BYTES + 1) }), env());
+    expect(tooBig.status).toBe(413);
+    expect((await readJson(tooBig)).error).toBe("Image trop volumineuse (5 Mo max).");
+  });
+
+  it("PUT et DELETE image : rejouent setItemImage dans le Durable Object via /apply en JSON", async () => {
+    const { calls, handler } = recorder();
+    const env = makeEnv(handler);
+    const url = "https://app.example/api/lists/abcdef/items/i1/image";
+    await worker.fetch(req(url, { method: "PUT", headers: PNG, body: new Uint8Array([1, 2]) }), env);
+    await worker.fetch(req(url, { method: "DELETE" }), env);
+    expect(calls).toEqual([
+      { code: "ABCDEF", url: "https://list.internal/apply", method: "POST", body: { type: "setItemImage", id: "i1", hasImage: true }, contentType: "application/json" },
+      { code: "ABCDEF", url: "https://list.internal/apply", method: "POST", body: { type: "setItemImage", id: "i1", hasImage: false }, contentType: "application/json" },
+    ]);
+  });
+
+  it("écritures d'image : 429 avec le message attendu quand le rate limiter refuse", async () => {
+    const env = makeEnv(() => Response.json({}), { imageRateLimiter: makeRateLimiter(false) });
+    const res = await worker.fetch(
+      req("https://app.example/api/lists/ABCDEF/items/i1/image", { method: "DELETE", headers: { "CF-Connecting-IP": "1.2.3.4" } }),
+      env,
+    );
+    expect((await readJson(res)).error).toBe(MSG_429);
+  });
+
+  it("route image : 405 « Method not allowed » pour une autre méthode", async () => {
+    const res = await worker.fetch(req("https://app.example/api/lists/ABCDEF/items/i1/image", { method: "PATCH" }), makeEnv(() => Response.json({})));
+    expect(res.status).toBe(405);
+    expect(await res.text()).toBe("Method not allowed");
   });
 });
