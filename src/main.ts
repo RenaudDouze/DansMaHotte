@@ -24,7 +24,7 @@ applyAccessibilityPreference(getAccessibilityPreference());
   params.delete("import");
   const query = params.toString();
   history.replaceState({}, "", location.pathname + (query ? `?${query}` : "") + location.hash);
-  if (payload) setPendingImport(payload);
+  setPendingImport(payload);
 })();
 
 const app = document.getElementById("app")!;

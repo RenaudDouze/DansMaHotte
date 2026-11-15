@@ -48,9 +48,9 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) dismiss();
     });
-    overlay.querySelector(".modal-close")?.addEventListener("click", dismiss);
-    overlay.querySelector("#pending-import-cancel")?.addEventListener("click", dismiss);
-    overlay.querySelector("#pending-import-create")?.addEventListener("click", async () => {
+    overlay.querySelector(".modal-close")!.addEventListener("click", dismiss);
+    overlay.querySelector("#pending-import-cancel")!.addEventListener("click", dismiss);
+    overlay.querySelector("#pending-import-create")!.addEventListener("click", async () => {
       const btn = overlay.querySelector("#pending-import-create") as HTMLButtonElement;
       btn.disabled = true;
       try {
@@ -140,14 +140,14 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
       </div>
     `;
 
-    root.querySelector("#theme-toggle")?.addEventListener("click", () => {
+    root.querySelector("#theme-toggle")!.addEventListener("click", () => {
       cycleThemePreference();
       render();
     });
 
-    root.querySelector("#btn-accessibility")?.addEventListener("click", openAccessibilityModal);
+    root.querySelector("#btn-accessibility")!.addEventListener("click", openAccessibilityModal);
 
-    root.querySelector("#create-form")?.addEventListener("submit", async (e) => {
+    root.querySelector("#create-form")!.addEventListener("submit", async (e) => {
       e.preventDefault();
       const form = e.target as HTMLFormElement;
       const nameInput = root.querySelector("#create-name") as HTMLInputElement;
@@ -163,7 +163,7 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
       }
     });
 
-    root.querySelector("#join-form")?.addEventListener("submit", async (e) => {
+    root.querySelector("#join-form")!.addEventListener("submit", async (e) => {
       e.preventDefault();
       const form = e.target as HTMLFormElement;
       const input = root.querySelector("#join-code") as HTMLInputElement;
@@ -194,15 +194,13 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
       btn.addEventListener("click", () => navigate(`/l/${btn.dataset.code}`));
     });
     root.querySelectorAll<HTMLButtonElement>(".recent-favorite").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
+      btn.addEventListener("click", () => {
         if (btn.dataset.code) toggleFavoriteList(btn.dataset.code);
         render();
       });
     });
     root.querySelectorAll<HTMLButtonElement>(".recent-forget").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
+      btn.addEventListener("click", () => {
         if (btn.dataset.code) forgetRecentList(btn.dataset.code);
         render();
       });

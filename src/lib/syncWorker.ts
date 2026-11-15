@@ -11,7 +11,7 @@ export function apiUrl(path: string): string {
 }
 
 export function wsUrl(path: string): string {
-  if (workerUrl) return `${workerUrl.replace(/^http/, "ws")}${path}`;
+  if (workerUrl) return `${workerUrl.replace("http", "ws")}${path}`;
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${location.host}${path}`;
 }

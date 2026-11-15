@@ -49,9 +49,10 @@ const RECIPIENT_COLOR_HUES: readonly { hue: number; name: string }[] = [
 // comme "Idée", pour ne rien changer à l'ordre existant.
 const statusOf = (item: Item): GiftStatus => item.status ?? "idee";
 
-// Sans destinataire (id null) : jamais masquable, uniquement les personnes
-// explicitement choisies (voir hiddenRecipientsPreference).
-const isRecipientVisible = (recipientId: string | null): boolean => recipientId === null || !isRecipientHidden(recipientId);
+// Sans destinataire (id null) : jamais masquable (null n'est jamais dans la
+// liste des identifiants masqués), uniquement les personnes explicitement
+// choisies (voir hiddenRecipientsPreference).
+const isRecipientVisible = (recipientId: string | null): boolean => !isRecipientHidden(recipientId!);
 
 // Une couleur par statut, du même esprit que sur OnMangeQuoi : un repère
 // visuel immédiat sans avoir à relire le libellé.
@@ -118,7 +119,7 @@ function openImageLightbox(url: string, alt: string, onDelete: () => void): void
     if (target === overlay || target.tagName === "IMG") close();
   });
   document.addEventListener("keydown", onKeydown);
-  overlay.querySelector(".image-lightbox-close")?.addEventListener("click", close);
+  overlay.querySelector(".image-lightbox-close")!.addEventListener("click", close);
   wireConfirmClick(overlay.querySelector<HTMLButtonElement>(".image-lightbox-delete")!, {
     armedLabel: "Confirmer la suppression de la photo",
     onConfirm: () => {
@@ -131,9 +132,12 @@ function openImageLightbox(url: string, alt: string, onDelete: () => void): void
 export function mountListView(root: HTMLElement, code: string, navigate: (path: string) => void): () => void {
   let state: ListState | null = getCachedListState(code);
   let connected = false;
-  let loading = state === null;
+  // Seul l'état « aucune liste disponible » (state nul) affiche l'écran de
+  // chargement ou d'erreur (voir render()) : les valeurs initiales de ces deux
+  // drapeaux n'ont d'effet que dans ce cas.
+  let loading = true;
   let notFound = false;
-  let loadError = false;
+  let loadError: boolean | undefined;
   let disposeItemDnd: (() => void) | null = null;
   let disposeRecipientDnd: (() => void) | null = null;
   let disposeSwipe: (() => void) | null = null;
@@ -180,15 +184,17 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     };
     undoEntries.push(entry);
     if (undoEntries.length > MAX_UNDO_STACK) {
-      const removed = undoEntries.shift();
-      if (removed) clearTimeout(removed.timer);
+      // shift() ne peut renvoyer undefined que sur un tableau vide, ce que la
+      // condition ci-dessus exclut déjà.
+      clearTimeout(undoEntries.shift()!.timer);
     }
     renderUndoToast();
   }
 
   function undoLast(): void {
-    const entry = undoEntries.pop();
-    if (!entry) return;
+    // Le bouton « Annuler » n'est affiché (voir renderUndoToast) que lorsque
+    // undoEntries n'est pas vide, et c'est le seul appelant de undoLast().
+    const entry = undoEntries.pop()!;
     clearTimeout(entry.timer);
     entry.undo();
     renderUndoToast();
@@ -196,7 +202,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
   function clearUndoStack(): void {
     for (const entry of undoEntries) clearTimeout(entry.timer);
-    undoEntries = [];
+    undoEntries.length = 0;
     document.getElementById("undo-toast")?.remove();
   }
 
@@ -221,7 +227,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
   function onStateUpdate(next: ListState) {
     state = next;
-    loading = false;
     notFound = false;
     cacheListState(next);
     // Pas touchRecentList ici : cette fonction tourne à chaque diffusion
@@ -245,7 +250,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       if (!fetched) {
         if (!state) {
           notFound = true;
-          loading = false;
           render();
           return;
         }
@@ -255,7 +259,8 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         touchRecentList(fetched.code, fetched.name);
       }
     } catch {
-      loadError = state === null;
+      // Sans effet si une liste en cache est déjà affichée (voir render()).
+      loadError = true;
     }
     loading = false;
     render();
@@ -267,7 +272,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   function render(): void {
     if (notFound) {
       root.innerHTML = notFoundHtml(code);
-      root.querySelector("#btn-home")?.addEventListener("click", () => navigate("/"));
+      root.querySelector("#btn-home")!.addEventListener("click", () => navigate("/"));
       return;
     }
     if (loading && !state) {
@@ -276,17 +281,19 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     }
     if (loadError && !state) {
       root.innerHTML = `<div class="centered-message"><p>Impossible de charger la liste. Vérifie ta connexion.</p><button class="btn" id="retry">Réessayer</button></div>`;
-      root.querySelector("#retry")?.addEventListener("click", () => location.reload());
+      root.querySelector("#retry")!.addEventListener("click", () => location.reload());
       return;
     }
-    if (!state) return;
+    // Les trois branches ci-dessus couvrent exhaustivement tous les cas où
+    // state peut être nul (jamais réassigné à null une fois non-nul) : au
+    // delà de ce point, garanti non-nul pour le reste du module.
 
     if (!shellMounted) {
       // Built only once: re-creating this on every realtime update would
       // wipe out whatever the user is currently typing in the add-item
       // input whenever a broadcast arrives (e.g. someone else adds an item
       // while you're composing yours).
-      root.innerHTML = layoutHtml(state, connected);
+      root.innerHTML = layoutHtml(state!, connected);
       wireHeader();
       wireAddForm();
       wireMenu();
@@ -311,9 +318,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
    * renseigné, pour ne pas afficher "0,00 €" sur une liste qui n'utilise
    * pas cette fonctionnalité. */
   function updateTotals(): void {
-    const el = root.querySelector("#totals-bar") as HTMLElement | null;
-    if (!el || !state) return;
-    const total = state.items.filter((i) => isRecipientVisible(i.recipientId)).reduce((sum, i) => sum + (i.price ?? 0), 0);
+    // Appelée uniquement une fois le gabarit construit (voir render()).
+    const el = root.querySelector("#totals-bar") as HTMLElement;
+    const total = state!.items.filter((i) => isRecipientVisible(i.recipientId)).reduce((sum, i) => sum + (i.price ?? 0), 0);
     el.hidden = total === 0;
     el.textContent = `Total : ${formatPrice(total)}`;
   }
@@ -323,9 +330,8 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
    * ci-dessus (personnes masquées comprises). Masquée tant que la liste est
    * vide (rien à montrer). */
   function updateProgress(): void {
-    const el = root.querySelector("#progress-bar") as HTMLElement | null;
-    if (!el || !state) return;
-    const items = state.items.filter((i) => isRecipientVisible(i.recipientId));
+    const el = root.querySelector("#progress-bar") as HTMLElement;
+    const items = state!.items.filter((i) => isRecipientVisible(i.recipientId));
     if (items.length === 0) {
       el.hidden = true;
       return;
@@ -337,7 +343,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       counts.set(status, (counts.get(status) ?? 0) + 1);
     }
     const total = items.length;
-    const presentStatuses = GIFT_STATUSES.filter((s) => (counts.get(s) ?? 0) > 0);
+    const presentStatuses = GIFT_STATUSES.filter((s) => counts.has(s));
     el.innerHTML = presentStatuses
       .map((s) => `<span class="progress-segment" style="width: ${((counts.get(s)! / total) * 100).toFixed(2)}%; background: ${GIFT_STATUS_COLORS[s]}"></span>`)
       .join("");
@@ -345,8 +351,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function checkCelebration(): void {
-    if (!state) return;
-    const isFullyChecked = state.items.length > 0 && state.items.every((i) => i.checked);
+    const isFullyChecked = state!.items.length > 0 && state!.items.every((i) => i.checked);
     if (wasFullyChecked !== null && isFullyChecked && !wasFullyChecked) celebrate();
     wasFullyChecked = isFullyChecked;
   }
@@ -365,17 +370,15 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function updateTitle(): void {
-    const titleEl = root.querySelector("#list-title") as HTMLElement | null;
-    if (!titleEl || !state) return;
+    const titleEl = root.querySelector("#list-title") as HTMLElement;
     if (titleEl.querySelector("input")) return; // user is mid-edit, don't clobber
-    if (titleEl.textContent !== state.name) titleEl.textContent = state.name;
+    titleEl.textContent = state!.name;
   }
 
   function updateRecipientSelect(): void {
-    const select = root.querySelector("#add-recipient") as HTMLSelectElement | null;
-    if (!select || !state) return;
+    const select = root.querySelector("#add-recipient") as HTMLSelectElement;
     const previous = select.value;
-    select.innerHTML = recipientOptionsHtml(state.recipients);
+    select.innerHTML = recipientOptionsHtml(state!.recipients);
     if ([...select.options].some((o) => o.value === previous)) select.value = previous;
   }
 
@@ -387,39 +390,37 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function wireHeader(): void {
-    root.querySelector("#btn-home")?.addEventListener("click", () => navigate("/"));
-    root.querySelector("#btn-hide-checked")?.addEventListener("click", (e) => {
+    root.querySelector("#btn-home")!.addEventListener("click", () => navigate("/"));
+    root.querySelector("#btn-hide-checked")!.addEventListener("click", (e) => {
       toggleHideCheckedPreference();
       updateHideCheckedButton(e.currentTarget as HTMLElement);
       renderRecipients();
     });
 
-    const searchBar = root.querySelector("#search-bar") as HTMLElement | null;
-    const searchInput = root.querySelector("#search-input") as HTMLInputElement | null;
+    const searchBar = root.querySelector("#search-bar") as HTMLElement;
+    const searchInput = root.querySelector("#search-input") as HTMLInputElement;
     const closeSearch = () => {
-      if (searchBar) searchBar.hidden = true;
+      searchBar.hidden = true;
       searchQuery = "";
-      if (searchInput) searchInput.value = "";
+      searchInput.value = "";
       renderRecipients();
     };
-    root.querySelector("#btn-search")?.addEventListener("click", () => {
-      if (!searchBar) return;
+    root.querySelector("#btn-search")!.addEventListener("click", () => {
       searchBar.hidden = !searchBar.hidden;
-      if (!searchBar.hidden) searchInput?.focus();
+      if (!searchBar.hidden) searchInput.focus();
       else closeSearch();
     });
-    root.querySelector("#search-close")?.addEventListener("click", closeSearch);
-    searchInput?.addEventListener("input", () => {
+    root.querySelector("#search-close")!.addEventListener("click", closeSearch);
+    searchInput.addEventListener("input", () => {
       searchQuery = searchInput.value;
       renderRecipients();
     });
-    searchInput?.addEventListener("keydown", (e) => {
+    searchInput.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeSearch();
     });
-    const titleEl = root.querySelector("#list-title") as HTMLElement | null;
-    titleEl?.addEventListener("click", () => {
-      if (!state) return;
-      const previousName = state.name;
+    const titleEl = root.querySelector("#list-title") as HTMLElement;
+    titleEl.addEventListener("click", () => {
+      const previousName = state!.name;
       startEdit(titleEl, {
         value: previousName,
         onCommit: (value) => {
@@ -442,56 +443,52 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function wireMenu(): void {
-    const menuBtn = root.querySelector("#btn-menu");
-    const panel = root.querySelector("#menu-panel") as HTMLElement | null;
-    menuBtn?.addEventListener("click", (e) => {
+    const menuBtn = root.querySelector("#btn-menu")!;
+    const panel = root.querySelector("#menu-panel") as HTMLElement;
+    menuBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (panel) panel.hidden = !panel.hidden;
+      panel.hidden = !panel.hidden;
     });
     document.addEventListener("click", () => {
-      if (panel) panel.hidden = true;
+      panel.hidden = true;
     });
 
-    panel?.querySelector('[data-action="share"]')?.addEventListener("click", () => {
-      if (!state) return;
-      openShareModal(state.code, state.name, {
+    panel.querySelector('[data-action="share"]')!.addEventListener("click", () => {
+      openShareModal(state!.code, state!.name, {
         onExport: () => {
-          if (state) exportListState(state);
+          exportListState(state!);
         },
         onImportFile: handleImportFile,
         onCompactShare: () => {
-          if (!state) return;
-          const url = buildCompactShareUrl({ name: state.name, items: state.items, recipients: state.recipients });
-          openCompactShareModal(url, state.name);
+          const url = buildCompactShareUrl({ name: state!.name, items: state!.items, recipients: state!.recipients });
+          openCompactShareModal(url, state!.name);
         },
       });
     });
-    panel?.querySelector('[data-action="theme"]')?.addEventListener("click", (e) => {
+    panel.querySelector('[data-action="theme"]')!.addEventListener("click", (e) => {
       cycleThemePreference();
       updateThemeMenuItem(e.currentTarget as HTMLElement);
     });
-    panel?.querySelector('[data-action="item-sort"]')?.addEventListener("click", (e) => {
+    panel.querySelector('[data-action="item-sort"]')!.addEventListener("click", (e) => {
       cycleItemSortPreference();
       updateItemSortMenuItem(e.currentTarget as HTMLElement);
       renderRecipients();
     });
-    panel?.querySelector('[data-action="manage-recipients"]')?.addEventListener("click", openRecipientManager);
-    panel?.querySelector('[data-action="accessibility"]')?.addEventListener("click", openAccessibilityModal);
-    const clearCheckedBtn = panel?.querySelector<HTMLButtonElement>('[data-action="clear-checked"]');
-    if (clearCheckedBtn) {
-      wireConfirmClick(clearCheckedBtn, {
-        armedText: "Confirmer : tout vider ?",
-        labelEl: clearCheckedBtn.querySelector<HTMLElement>(".menu-item-label") ?? undefined,
-        isDisabled: () => (state?.items.filter((i) => i.checked).length ?? 0) === 0,
-        onConfirm: () => {
-          const checkedItems = state?.items.filter((i) => i.checked) ?? [];
-          if (checkedItems.length === 0) return;
-          conn.send({ type: "clearChecked" });
-          pushUndo(`${checkedItems.length} cadeau(x) emballé(s) vidé(s)`, () => conn.send({ type: "restoreItems", items: checkedItems }));
-          if (panel) panel.hidden = true;
-        },
-      });
-    }
+    panel.querySelector('[data-action="manage-recipients"]')!.addEventListener("click", openRecipientManager);
+    panel.querySelector('[data-action="accessibility"]')!.addEventListener("click", openAccessibilityModal);
+    const clearCheckedBtn = panel.querySelector<HTMLButtonElement>('[data-action="clear-checked"]')!;
+    wireConfirmClick(clearCheckedBtn, {
+      armedText: "Confirmer : tout vider ?",
+      labelEl: clearCheckedBtn.querySelector<HTMLElement>(".menu-item-label")!,
+      isDisabled: () => state!.items.filter((i) => i.checked).length === 0,
+      onConfirm: () => {
+        const checkedItems = state!.items.filter((i) => i.checked);
+        if (checkedItems.length === 0) return;
+        conn.send({ type: "clearChecked" });
+        pushUndo(`${checkedItems.length} cadeau(x) emballé(s) vidé(s)`, () => conn.send({ type: "restoreItems", items: checkedItems }));
+        panel.hidden = true;
+      },
+    });
   }
 
   async function handleImportFile(file: File): Promise<void> {
@@ -523,24 +520,22 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     const close = () => {
       overlay.remove();
       releaseFocusTrap();
+      document.removeEventListener("keydown", onKeydown);
     };
+    function onKeydown(e: KeyboardEvent) {
+      if (e.key === "Escape") close();
+    }
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) close();
     });
-    document.addEventListener("keydown", onImportKeydown);
-    function onImportKeydown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        document.removeEventListener("keydown", onImportKeydown);
-        close();
-      }
-    }
-    overlay.querySelector(".modal-close")?.addEventListener("click", close);
-    overlay.querySelector("#import-cancel")?.addEventListener("click", close);
-    overlay.querySelector("#import-merge")?.addEventListener("click", () => {
+    document.addEventListener("keydown", onKeydown);
+    overlay.querySelector(".modal-close")!.addEventListener("click", close);
+    overlay.querySelector("#import-cancel")!.addEventListener("click", close);
+    overlay.querySelector("#import-merge")!.addEventListener("click", () => {
       conn.send({ type: "importState", mode: "merge", data });
       close();
     });
-    overlay.querySelector("#import-replace")?.addEventListener("click", () => {
+    overlay.querySelector("#import-replace")!.addEventListener("click", () => {
       if (confirm("Remplacer entièrement la liste actuelle par le contenu du fichier ?")) {
         conn.send({ type: "importState", mode: "replace", data });
         close();
@@ -549,7 +544,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function openRecipientManager(): void {
-    if (!state) return;
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
     let openPaletteFor: string | null = null;
@@ -585,10 +579,10 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <p class="add-form-hint">${PRIVACY_HINT}</p>
         </div>
       `;
-      overlay.querySelector(".modal-close")?.addEventListener("click", close);
+      overlay.querySelector(".modal-close")!.addEventListener("click", close);
       overlay.querySelectorAll<HTMLElement>(".recipient-name").forEach((el) => {
         el.addEventListener("click", () => {
-          const previousName = el.textContent || "";
+          const previousName = el.textContent!;
           startEdit(el, {
             value: previousName,
             onCommit: (value) => {
@@ -609,8 +603,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       });
       overlay.querySelectorAll<HTMLElement>(".color-swatch").forEach((btn) => {
         btn.addEventListener("click", () => {
-          const id = btn.closest("li")?.dataset.id;
-          if (!id) return;
+          // .color-swatch n'apparaît que dans colorPaletteHtml(r), toujours
+          // rendu à l'intérieur du <li data-id> de sa propre personne r.
+          const id = btn.closest("li")!.dataset.id!;
           const raw = btn.dataset.color!;
           conn.send({ type: "setRecipientColor", id, color: raw === "auto" ? null : Number(raw) });
           openPaletteFor = null;
@@ -632,8 +627,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       });
       overlay.querySelectorAll<HTMLElement>('[data-action="del"]').forEach((btn) => {
         const id = btn.dataset.id!;
-        const recipient = state!.recipients.find((r) => r.id === id);
-        if (!recipient) return;
+        // Vient de state!.recipients à l'instant même du rendu ci-dessus :
+        // toujours trouvée.
+        const recipient = state!.recipients.find((r) => r.id === id)!;
         wireConfirmClick(btn, {
           armedLabel: `Confirmer la suppression de « ${recipient.name} »`,
           onConfirm: () => {
@@ -643,7 +639,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           },
         });
       });
-      overlay.querySelector("#new-recipient-form")?.addEventListener("submit", (e) => {
+      overlay.querySelector("#new-recipient-form")!.addEventListener("submit", (e) => {
         e.preventDefault();
         const input = overlay.querySelector("#new-recipient-name") as HTMLInputElement;
         const name = input.value.trim();
@@ -659,14 +655,13 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         handleSelector: ".recipient-manage-drag-handle",
         onDrop: () => {
           const orderedIds = Array.from(overlay.querySelectorAll<HTMLElement>(".manage-recipient-list li"))
-            .map((li) => li.dataset.id!)
-            .filter((id) => id);
+            .map((li) => li.dataset.id!);
           conn.send({ type: "reorderRecipients", orderedIds });
         },
       });
     };
     const close = () => {
-      disposeDnd?.();
+      disposeDnd!();
       overlay.remove();
       unsubscribe();
       releaseFocusTrap();
@@ -686,16 +681,15 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function wireAddForm(): void {
-    const form = root.querySelector("#add-form") as HTMLFormElement | null;
-    const input = root.querySelector("#add-input") as HTMLInputElement | null;
-    const recipientSelect = root.querySelector("#add-recipient") as HTMLSelectElement | null;
-    if (!form || !input) return;
+    const form = root.querySelector("#add-form") as HTMLFormElement;
+    const input = root.querySelector("#add-input") as HTMLInputElement;
+    const recipientSelect = root.querySelector("#add-recipient") as HTMLSelectElement;
 
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const rawText = input.value.trim();
       if (!rawText) return;
-      const recipientId = recipientSelect?.value || null;
+      const recipientId = recipientSelect.value || null;
       conn.send({ type: "addItem", id: uid(), rawText, recipientId });
       input.value = "";
       input.focus();
@@ -736,8 +730,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     anchor.setAttribute("aria-expanded", "true");
 
     panel.querySelectorAll<HTMLButtonElement>(".status-pill").forEach((pill) => {
-      pill.addEventListener("click", (e) => {
-        e.stopPropagation();
+      pill.addEventListener("click", () => {
         const status = pill.dataset.status as GiftStatus;
         // Mise à jour optimiste : sans elle, le badge n'apparaît qu'après
         // l'aller-retour serveur. L'état reçu en confirmation écrasera de
@@ -745,7 +738,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         item.status = status;
         item.checked = status === "emballe";
         if (item.checked) navigator.vibrate?.(10);
-        closeStatusPicker();
+        // renderRecipients() referme le menu avant de redessiner la liste.
         renderRecipients();
         conn.send({ type: "updateItem", id: item.id, status });
       });
@@ -871,8 +864,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function renderRecipients(): void {
-    const container = root.querySelector("#recipients") as HTMLElement | null;
-    if (!container || !state) return;
+    const container = root.querySelector("#recipients") as HTMLElement;
     // Le popover référence un bouton précis du DOM actuel : sur le point de
     // reconstruire ce DOM, mieux vaut le refermer plutôt que de le laisser
     // pointer vers un nœud qui va disparaître.
@@ -889,7 +881,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     // hasAnyGift ne font plus que lire ces regroupements.
     const itemsByRecipient = new Map<string | null, Item[]>();
     const totalByRecipient = new Map<string | null, number>();
-    for (const item of state.items) {
+    for (const item of state!.items) {
       const key = item.recipientId;
       const items = itemsByRecipient.get(key);
       if (items) items.push(item);
@@ -898,7 +890,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     }
     const byRecipient = (recipientId: string | null): Item[] => {
       const items = itemsByRecipient.get(recipientId) ?? [];
-      if (!query && !hideChecked) return items;
       return items.filter((i) => (!query || i.name.toLowerCase().includes(query)) && (!hideChecked || !i.checked));
     };
     const hasAnyGift = (recipientId: string | null): boolean => (itemsByRecipient.get(recipientId)?.length ?? 0) > 0;
@@ -919,20 +910,21 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     // entièrement de la liste principale, nom compris — pas seulement ses
     // cadeaux — pour rester discrète le temps de montrer l'écran à
     // quelqu'un. Reste gérable (et démasquable) depuis "Gérer les personnes".
-    const recipients = [...state.recipients].filter((r) => isRecipientVisible(r.id)).sort((a, b) => a.order - b.order);
-    type Group = { id: string | null; name: string; items: Item[]; showHeader: boolean; hue: number };
+    const recipients = [...state!.recipients].filter((r) => isRecipientVisible(r.id)).sort((a, b) => a.order - b.order);
+    // name nul : pas d'en-tête (liste sans aucune personne).
+    type Group = { id: string | null; name: string | null; items: Item[]; hue: number };
     let groups: Group[] = recipients.map((r) => ({
       id: r.id,
       name: r.name,
       items: sortItems(byRecipient(r.id)),
-      showHeader: true,
       hue: resolveRecipientHue(r),
     }));
     const unassigned = sortItems(byRecipient(null));
     if (recipients.length === 0) {
-      groups.unshift({ id: null, name: "Cadeaux", items: unassigned, showHeader: false, hue: 0 });
-    } else if (unassigned.length > 0) {
-      groups.push({ id: null, name: "Sans destinataire", items: unassigned, showHeader: true, hue: 0 });
+      groups.unshift({ id: null, name: null, items: unassigned, hue: 0 });
+    } else {
+      // Retiré ci-dessous s'il est vide, comme tout groupe sans cadeau.
+      groups.push({ id: null, name: "Sans destinataire", items: unassigned, hue: 0 });
     }
 
     // Une personne reste affichée même sans aucun cadeau (pour ne pas
@@ -954,7 +946,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       return;
     }
 
-    if (groups.length === 0 && hideChecked && state.items.length > 0) {
+    if (groups.length === 0 && hideChecked && state!.items.length > 0) {
       container.innerHTML = `<div class="empty-state">Tous les cadeaux sont emballés (et masqués).</div>`;
       return;
     }
@@ -969,7 +961,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         (g) => `
       <section class="recipient-section${g.id ? " has-color" : ""}" data-recipient-id="${escapeHtml(g.id ?? "")}" ${g.id ? `style="--person-hue: ${escapeHtml(String(g.hue))}"` : ""}>
         ${
-          g.showHeader
+          g.name !== null
             ? `<header class="recipient-header">
                 ${g.id ? `<button class="drag-handle recipient-drag-handle" aria-label="Réordonner la personne">${icons.gripVertical}</button>` : `<span class="drag-handle-spacer"></span>`}
                 ${g.id ? `<span class="person-dot" aria-hidden="true"></span>` : ""}
@@ -994,19 +986,19 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     // reste unique et en haut de page plutôt que dupliqué par section.
     container.querySelectorAll<HTMLButtonElement>(".recipient-add").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const recipientSelect = root.querySelector("#add-recipient") as HTMLSelectElement | null;
-        const input = root.querySelector("#add-input") as HTMLInputElement | null;
-        if (recipientSelect) recipientSelect.value = btn.dataset.id ?? "";
-        input?.scrollIntoView({ behavior: "smooth", block: "center" });
-        input?.focus();
+        const recipientSelect = root.querySelector("#add-recipient") as HTMLSelectElement;
+        const input = root.querySelector("#add-input") as HTMLInputElement;
+        recipientSelect.value = btn.dataset.id!;
+        input.scrollIntoView({ behavior: "smooth", block: "center" });
+        input.focus();
       });
     });
 
     container.querySelectorAll<HTMLButtonElement>(".item-status").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const item = state!.items.find((i) => i.id === btn.dataset.id);
-        if (!item) return;
+      btn.addEventListener("click", () => {
+        // Le DOM est reconstruit à chaque mise à jour : ce bouton correspond
+        // toujours à un cadeau présent dans state.
+        const item = state!.items.find((i) => i.id === btn.dataset.id)!;
         if (activeStatusPicker?.anchor === btn) {
           closeStatusPicker();
           return;
@@ -1016,10 +1008,8 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     });
 
     container.querySelectorAll<HTMLButtonElement>(".item-link").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const item = state!.items.find((i) => i.id === btn.dataset.id);
-        if (!item) return;
+      btn.addEventListener("click", () => {
+        const item = state!.items.find((i) => i.id === btn.dataset.id)!;
         if (activeLinkEditor?.anchor === btn) {
           closeLinkEditor();
           return;
@@ -1029,8 +1019,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     });
 
     container.querySelectorAll<HTMLElement>('[data-action="delete-item"]').forEach((btn) => {
-      const item = state!.items.find((i) => i.id === btn.dataset.id);
-      if (!item) return;
+      const item = state!.items.find((i) => i.id === btn.dataset.id)!;
       wireConfirmClick(btn, {
         armedLabel: `Confirmer la suppression de « ${item.name} »`,
         onConfirm: () => {
@@ -1042,8 +1031,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
     container.querySelectorAll<HTMLElement>(".item-name").forEach((el) => {
       el.addEventListener("click", () => {
-        const item = state!.items.find((i) => i.id === el.dataset.id);
-        if (!item) return;
+        const item = state!.items.find((i) => i.id === el.dataset.id)!;
         const previousName = item.name;
         startEdit(el, {
           value: previousName,
@@ -1062,8 +1050,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
     container.querySelectorAll<HTMLElement>(".item-price").forEach((el) => {
       el.addEventListener("click", () => {
-        const item = state!.items.find((i) => i.id === el.dataset.id);
-        if (!item) return;
+        const item = state!.items.find((i) => i.id === el.dataset.id)!;
         const previousPrice = item.price ?? null;
         startEdit(el, {
           value: item.price !== undefined ? formatPrice(item.price).replace(" €", "") : "",
@@ -1086,7 +1073,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     container.querySelectorAll<HTMLElement>(".person-name").forEach((el) => {
       if (!el.dataset.id) return;
       el.addEventListener("click", () => {
-        const previousName = el.textContent || "";
+        const previousName = el.textContent!;
         startEdit(el, {
           value: previousName,
           onCommit: (value) => {
@@ -1148,8 +1135,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       contentSelector: ".item-content",
       ignoreSelector: ".item-drag-handle, .item-status, .item-delete, .item-photo, .item-link",
       onDelete: (el) => {
-        const item = state!.items.find((i) => i.id === el.dataset.id);
-        if (!item) return;
+        const item = state!.items.find((i) => i.id === el.dataset.id)!;
         conn.send({ type: "deleteItem", id: item.id });
         pushUndo(`« ${item.name} » supprimé`, () => conn.send({ type: "restoreItems", items: [item] }));
       },
@@ -1195,18 +1181,17 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
     container.querySelectorAll<HTMLButtonElement>('[data-action="item-photo"]').forEach((btn) => {
       btn.addEventListener("click", () => {
-        const item = state!.items.find((i) => i.id === btn.dataset.id);
-        if (!item) return;
+        const item = state!.items.find((i) => i.id === btn.dataset.id)!;
         if (item.hasImage) {
           openImageLightbox(itemImageUrl(code, item.id, item.imageVersion), item.name, () => remove(item.id));
         } else {
-          container.querySelector<HTMLInputElement>(`.item-image-input[data-id="${item.id}"]`)?.click();
+          container.querySelector<HTMLInputElement>(`.item-image-input[data-id="${item.id}"]`)!.click();
         }
       });
     });
     container.querySelectorAll<HTMLInputElement>(".item-image-input").forEach((input) => {
       input.addEventListener("change", () => {
-        const file = input.files?.[0];
+        const file = input.files![0];
         const id = input.dataset.id!;
         input.value = "";
         if (file) send(id, file);
@@ -1246,13 +1231,13 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     `;
   }
 
-  function recipientOptionsHtml(recipients: Recipient[], selectedId: string | null = null): string {
+  function recipientOptionsHtml(recipients: Recipient[]): string {
     // Alphabétique plutôt que l'ordre manuel des personnes (voir
     // renderRecipients) : plus facile à parcourir dans une liste déroulante
     // qu'à retenir un ordre personnalisé.
     const sorted = [...recipients].sort((a, b) => alnumCompare(a.name, b.name));
-    const optionHtml = (r: Recipient) => `<option value="${escapeHtml(r.id)}" ${r.id === selectedId ? "selected" : ""}>${escapeHtml(r.name)}</option>`;
-    return [`<option value="" ${selectedId === null ? "selected" : ""}>Sans destinataire</option>`, sorted.map(optionHtml).join("")].join("");
+    const optionHtml = (r: Recipient) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.name)}</option>`;
+    return [`<option value="" selected>Sans destinataire</option>`, sorted.map(optionHtml).join("")].join("");
   }
 
   function layoutHtml(s: ListState, isConnected: boolean): string {

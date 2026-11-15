@@ -26,11 +26,13 @@ export function wireConfirmClick(el: HTMLElement, opts: ConfirmClickOptions): vo
   const originalLabel = el.getAttribute("aria-label");
   const textTarget = opts.labelEl ?? el;
   const originalText = textTarget.textContent;
-  let timer: ReturnType<typeof setTimeout> | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
   const disarm = (): void => {
-    if (timer !== null) clearTimeout(timer);
-    timer = null;
+    // clearTimeout ignore silencieusement un id undefined (aucun timer
+    // programmé) : pas besoin de le vérifier nous-mêmes.
+    clearTimeout(timer);
+    timer = undefined;
     el.classList.remove("confirm-armed");
     if (originalLabel !== null) el.setAttribute("aria-label", originalLabel);
     if (opts.armedText !== undefined) textTarget.textContent = originalText;

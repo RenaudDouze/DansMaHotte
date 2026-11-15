@@ -7,7 +7,7 @@ import type { ImportPayload } from "./importPayload";
 // l'applique une fois connectée (voir list.ts).
 let pending: ImportPayload | null = null;
 
-export function setPendingImport(payload: ImportPayload): void {
+export function setPendingImport(payload: ImportPayload | null): void {
   pending = payload;
 }
 

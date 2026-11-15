@@ -4,17 +4,15 @@ const KEY = "dmh:itemSort";
 const NEXT: Record<ItemSortPreference, ItemSortPreference> = { manual: "alphabetical", alphabetical: "price", price: "manual" };
 const LABEL: Record<ItemSortPreference, string> = { manual: "Manuel", alphabetical: "Alphabétique", price: "Prix" };
 
-function isItemSortPreference(value: unknown): value is ItemSortPreference {
-  return value === "manual" || value === "alphabetical" || value === "price";
-}
-
 /** Personal, per-device display preference (like the theme) — never synced
  * to the shared list state. Defaults to "manual" (the existing drag-to-reorder
  * behavior) so nothing changes unless the user opts in. */
 export function getItemSortPreference(): ItemSortPreference {
   try {
     const stored = localStorage.getItem(KEY);
-    return isItemSortPreference(stored) ? stored : "manual";
+    // "manual" est le repli : toute autre valeur stockée (absente, invalide)
+    // y mène aussi, inutile de la tester explicitement.
+    return stored === "alphabetical" || stored === "price" ? stored : "manual";
   } catch {
     return "manual";
   }

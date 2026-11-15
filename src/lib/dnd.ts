@@ -10,16 +10,18 @@ export interface DragReorderOptions {
  * items between recipient groups). No external dependency. */
 export function enableDragReorder(root: HTMLElement, opts: DragReorderOptions): () => void {
   let dragEl: HTMLElement | null = null;
-  // Le pointeur peut émettre bien plus d'événements que d'images affichées
-  // (surtout au toucher) ; on ne garde que la position la plus récente et on
-  // ne fait le travail coûteux (elementFromPoint + déplacement DOM, donc
-  // reflow) qu'une fois par frame, plutôt qu'à chaque pointermove.
+  // elementFromPoint()/getBoundingClientRect() forcent un reflow ; les
+  // limiter à une fois par frame (au lieu d'une fois par pointermove, qui
+  // peut arriver bien plus souvent) évite de refaire ce travail pour rien
+  // entre deux peintures. e.preventDefault() reste appelé à chaque event
+  // (nécessaire tout de suite pour bloquer le scroll tactile pendant le
+  // glisser), seul le hit-test/déplacement DOM est différé.
   let rafId: number | null = null;
   let pendingX = 0;
   let pendingY = 0;
 
   function onPointerDown(e: PointerEvent) {
-    if (e.button !== undefined && e.button !== 0) return;
+    if (e.button !== 0) return;
     const target = e.target as HTMLElement;
     const handle = target.closest(opts.handleSelector) as HTMLElement | null;
     if (!handle || !root.contains(handle)) return;
@@ -40,34 +42,36 @@ export function enableDragReorder(root: HTMLElement, opts: DragReorderOptions): 
   }
 
   function onPointerMove(e: PointerEvent) {
-    if (!dragEl) return;
+    // Écouteur document ajouté par onPointerDown juste après avoir affecté
+    // dragEl, et retiré par onPointerUp en tout premier : ne peut donc se
+    // déclencher que pendant un glisser actif (dragEl non nul).
     e.preventDefault();
     pendingX = e.clientX;
     pendingY = e.clientY;
-    if (rafId === null) {
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        applyMove(pendingX, pendingY);
-      });
-    }
+    if (rafId === null) rafId = requestAnimationFrame(processPendingMove);
   }
 
-  function applyMove(clientX: number, clientY: number) {
+  function processPendingMove() {
+    rafId = null;
     if (!dragEl) return;
     const prevPointerEvents = dragEl.style.pointerEvents;
     dragEl.style.pointerEvents = "none";
-    const overEl = document.elementFromPoint(clientX, clientY);
+    const overEl = document.elementFromPoint(pendingX, pendingY);
     dragEl.style.pointerEvents = prevPointerEvents;
     if (!overEl) return;
 
-    const container = overEl.closest<HTMLElement>(opts.containerSelector);
-    if (!container || !root.contains(container)) return;
+    const container = overEl.closest<HTMLElement>(opts.containerSelector)!;
+    // `root.contains(null)` vaut faux : un survol hors de tout conteneur
+    // s'arrête ici, `container` est donc non nul au-delà.
+    if (!root.contains(container)) return;
 
     const overItem = overEl.closest(opts.itemSelector) as HTMLElement | null;
-    if (overItem && overItem !== dragEl && container.contains(overItem)) {
-      const rect = overItem.getBoundingClientRect();
-      const before = clientY < rect.top + rect.height / 2;
-      container.insertBefore(dragEl, before ? overItem : overItem.nextSibling);
+    // Survoler l'article déplacé lui-même ne change rien (insertBefore(x, x)
+    // est sans effet) ; `contains(null)` vaut faux quand aucun article n'est survolé.
+    if (container.contains(overItem)) {
+      const rect = overItem!.getBoundingClientRect();
+      const before = pendingY < rect.top + rect.height / 2;
+      container.insertBefore(dragEl, before ? overItem : overItem!.nextSibling);
     } else if (!overItem && !container.contains(dragEl)) {
       container.appendChild(dragEl);
     }
@@ -77,21 +81,21 @@ export function enableDragReorder(root: HTMLElement, opts: DragReorderOptions): 
     document.removeEventListener("pointermove", onPointerMove);
     document.removeEventListener("pointerup", onPointerUp);
     document.removeEventListener("pointercancel", onPointerUp);
+    // Un déplacement en attente doit être appliqué avant le drop, pas
+    // simplement annulé : sinon la dernière position (potentiellement à
+    // peine plus tôt qu'une frame) n'aurait jamais son effet.
     if (rafId !== null) {
-      // Applique tout de suite le dernier déplacement en attente plutôt que
-      // de l'abandonner : sinon le dernier pointermove avant le relâchement
-      // (souvent le plus significatif) pourrait ne jamais être pris en
-      // compte si aucune frame ne s'est encore écoulée entre les deux.
       cancelAnimationFrame(rafId);
       rafId = null;
-      applyMove(pendingX, pendingY);
+      processPendingMove();
     }
-    const el = dragEl;
+    // onPointerUp ne peut s'exécuter que via les écouteurs posés par
+    // onPointerDown juste après avoir affecté dragEl, et il les retire lui-
+    // même en tout premier (ci-dessus) : dragEl est donc garanti non nul ici.
+    const el = dragEl!;
     dragEl = null;
-    if (el) {
-      el.classList.remove("dragging");
-      opts.onDrop(el);
-    }
+    el.classList.remove("dragging");
+    opts.onDrop(el);
   }
 
   root.addEventListener("pointerdown", onPointerDown);

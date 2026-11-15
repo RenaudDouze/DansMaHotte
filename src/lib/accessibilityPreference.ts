@@ -8,27 +8,30 @@ const KEY = "dmh:a11y";
 
 const DEFAULT_PREFERENCE: AccessibilityPreference = { largeText: false, highContrast: false, reduceMotion: false };
 
-/** Personal, per-device display preference (like the theme or item sort) —
- * never synced to the shared list state. Defaults to everything off, so
- * nothing changes unless the user opts in. */
+// Réglage personnel par appareil (comme le thème), jamais synchronisé via le
+// ListState partagé. Reste sur les valeurs par défaut (tout désactivé) si
+// rien n'est stocké, si la valeur stockée est invalide (y compris l'ancien
+// format `"on"`/`"off"` d'avant le passage à trois réglages indépendants),
+// ou si localStorage est indisponible.
 export function getAccessibilityPreference(): AccessibilityPreference {
   try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULT_PREFERENCE };
-    const parsed = JSON.parse(raw);
+    // Rien de stocké (`null`) : JSON.parse(null) vaut `null`, dont la lecture
+    // d'une propriété lève — le `catch` ci-dessous donne alors les défauts.
+    const parsed = JSON.parse(localStorage.getItem(KEY) as string);
     return {
-      largeText: parsed?.largeText === true,
-      highContrast: parsed?.highContrast === true,
-      reduceMotion: parsed?.reduceMotion === true,
+      largeText: parsed.largeText === true,
+      highContrast: parsed.highContrast === true,
+      reduceMotion: parsed.reduceMotion === true,
     };
   } catch {
     return { ...DEFAULT_PREFERENCE };
   }
 }
 
-/** Reflects the preference as boolean data-attributes on <html>, read by
- * style.css — applied both at boot (main.ts) and on every change, so a
- * reload never needs to guess the previous state. */
+// Trois attributs booléens indépendants sur <html>, lus par style.css
+// ([data-large-text]/[data-high-contrast]/[data-reduce-motion]) — plutôt
+// qu'un seul `data-a11y` regroupant tout, pour permettre à chacun d'être
+// activé séparément selon le besoin réel de la personne.
 export function applyAccessibilityPreference(pref: AccessibilityPreference): void {
   const root = document.documentElement;
   root.toggleAttribute("data-large-text", pref.largeText);

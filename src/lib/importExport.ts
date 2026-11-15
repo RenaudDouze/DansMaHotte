@@ -16,7 +16,6 @@ export function exportListState(state: ListState): void {
   const url = URL.createObjectURL(blob);
   const slug =
     state.name
-      .trim()
       .toLowerCase()
       .normalize("NFD")
       .replace(new RegExp("[\\u0300-\\u036f]", "g"), "")

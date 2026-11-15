@@ -1,9 +1,9 @@
 const KEY = "dmh:hiddenRecipients";
 
 function safeParseIds(raw: string | null): string[] {
-  if (!raw) return [];
   try {
-    const parsed: unknown = JSON.parse(raw);
+    // `null` (rien de stocké) n'est pas un tableau ; une chaîne vide lève.
+    const parsed: unknown = JSON.parse(raw as string);
     return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
   } catch {
     return [];
