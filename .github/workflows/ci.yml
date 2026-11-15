@@ -105,7 +105,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm audit --audit-level=high
+      - name: Audit des dépendances de production
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: Audit complet (production + développement)
+        run: npm audit --audit-level=high
 
   build:
     name: Build de production
