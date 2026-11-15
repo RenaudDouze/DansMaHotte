@@ -30,12 +30,12 @@ jobs:
       # la vérification post-déploiement ci-dessous est sautée.
       url: ${{ vars.DEPLOY_URL }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # Le SHA exact qui a passé la CI, pas juste « la HEAD actuelle de
           # main » qui a pu bouger entre-temps si des pushes s'enchaînent.
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
           cache: npm
@@ -57,7 +57,7 @@ jobs:
             grep -qi "already exists" /tmp/r2-create.log || { cat /tmp/r2-create.log; exit 1; }
           fi
 
-      - uses: cloudflare/wrangler-action@v4
+      - uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
