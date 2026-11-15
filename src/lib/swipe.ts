@@ -27,8 +27,10 @@ export function enableSwipeToDelete(root: HTMLElement, opts: SwipeToDeleteOption
   let startX = 0;
   let startY = 0;
   let dx = 0;
-  let tracking = false;
-  let committed = false;
+  // Initialisés par onPointerDown : les écouteurs qui les lisent ne sont
+  // posés qu'après, et retirés à la fin du geste.
+  let tracking: boolean;
+  let committed: boolean;
 
   function snapBack(el: HTMLElement) {
     el.style.transition = "transform 0.2s ease";
@@ -59,7 +61,7 @@ export function enableSwipeToDelete(root: HTMLElement, opts: SwipeToDeleteOption
   }
 
   function onPointerMove(e: PointerEvent) {
-    if (!tracking || !content) return;
+    if (!tracking) return;
     const deltaX = e.clientX - startX;
     const deltaY = e.clientY - startY;
     if (!committed) {
@@ -73,22 +75,19 @@ export function enableSwipeToDelete(root: HTMLElement, opts: SwipeToDeleteOption
     }
     e.preventDefault();
     dx = Math.min(0, deltaX);
-    content.style.transform = `translateX(${dx}px)`;
+    content!.style.transform = `translateX(${dx}px)`;
   }
 
   function onPointerUp() {
     document.removeEventListener("pointermove", onPointerMove);
     document.removeEventListener("pointerup", onPointerUp);
     document.removeEventListener("pointercancel", onPointerUp);
-    const el = item;
-    const contentEl = content;
-    const wasCommitted = committed;
+    // onPointerUp n'est joignable qu'entre onPointerDown (qui affecte item et
+    // content) et son propre retrait des écouteurs : jamais nuls ici.
+    const el = item!;
+    const contentEl = content!;
+    if (!committed) return;
     const finalDx = dx;
-    tracking = false;
-    committed = false;
-    item = null;
-    content = null;
-    if (!el || !contentEl || !wasCommitted) return;
     if (finalDx <= -threshold) {
       contentEl.style.transition = "transform 0.18s ease, opacity 0.18s ease";
       contentEl.style.transform = "translateX(-100%)";

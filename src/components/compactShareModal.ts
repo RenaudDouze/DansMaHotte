@@ -31,8 +31,9 @@ export function openCompactShareModal(url: string, listName: string): void {
   document.body.appendChild(overlay);
 
   renderQrSvg(url).then((svg) => {
-    const wrap = overlay.querySelector("#qr-wrap");
-    if (wrap) wrap.innerHTML = svg;
+    // Gabarit statique ci-dessus : #qr-wrap est toujours présent, que la
+    // modale soit encore affichée ou déjà détachée du document.
+    overlay.querySelector("#qr-wrap")!.innerHTML = svg;
   });
 
   const modal = overlay.querySelector(".modal") as HTMLElement;
@@ -51,9 +52,9 @@ export function openCompactShareModal(url: string, listName: string): void {
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) close();
   });
-  overlay.querySelector(".modal-close")?.addEventListener("click", close);
+  overlay.querySelector(".modal-close")!.addEventListener("click", close);
 
-  overlay.querySelector("#copy-compact-link")?.addEventListener("click", async () => {
+  overlay.querySelector("#copy-compact-link")!.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(url);
     } catch {
@@ -71,8 +72,8 @@ export function openCompactShareModal(url: string, listName: string): void {
 }
 
 function flash(root: HTMLElement, selector: string, text: string): void {
-  const el = root.querySelector(selector) as HTMLElement | null;
-  if (!el) return;
+  // Toujours appelée avec un sélecteur du gabarit statique de la modale.
+  const el = root.querySelector(selector) as HTMLElement;
   const original = el.textContent;
   el.textContent = text;
   setTimeout(() => {

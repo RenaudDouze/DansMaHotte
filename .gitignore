@@ -11,3 +11,4 @@ test-results
 e2e/fixtures
 .stryker-tmp
 reports
+mutation-report

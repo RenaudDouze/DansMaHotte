@@ -18,6 +18,16 @@ export async function fetchListState(code: string): Promise<ListState | null> {
   return res.json();
 }
 
+/** Message d'erreur renvoyé par le serveur (`{ error }`), ou `fallback` si la
+ * réponse n'est pas du JSON ou n'en contient pas. */
+async function errorMessage(res: Response, fallback: string): Promise<string> {
+  const message: string | undefined = await res.json().then(
+    (body: { error?: string }) => body.error,
+    () => undefined,
+  );
+  return message || fallback;
+}
+
 function itemImagePath(code: string, itemId: string): string {
   return `/api/lists/${encodeURIComponent(code)}/items/${encodeURIComponent(itemId)}/image`;
 }
@@ -36,15 +46,13 @@ export async function uploadItemImage(code: string, itemId: string, file: Blob):
     body: file,
   });
   if (!res.ok) {
-    const body: { error?: string } | null = await res.json().catch(() => null);
-    throw new Error(body?.error || "Impossible d'envoyer l'image.");
+    throw new Error(await errorMessage(res, "Impossible d'envoyer l'image."));
   }
 }
 
 export async function deleteItemImage(code: string, itemId: string): Promise<void> {
   const res = await fetch(apiUrl(itemImagePath(code, itemId)), { method: "DELETE" });
   if (!res.ok) {
-    const body: { error?: string } | null = await res.json().catch(() => null);
-    throw new Error(body?.error || "Impossible de supprimer l'image.");
+    throw new Error(await errorMessage(res, "Impossible de supprimer l'image."));
   }
 }

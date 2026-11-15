@@ -24,7 +24,7 @@ export function openAccessibilityModal(): void {
           (opt) => `
           <li>
             <label class="accessibility-option">
-              <input type="checkbox" data-key="${opt.key}" ${pref[opt.key] ? "checked" : ""} />
+              <input type="checkbox" data-key="${opt.key}" />
               <span>
                 <strong>${opt.label}</strong>
                 <small>${opt.hint}</small>
@@ -52,11 +52,12 @@ export function openAccessibilityModal(): void {
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) close();
   });
-  overlay.querySelector(".modal-close")?.addEventListener("click", close);
+  overlay.querySelector(".modal-close")!.addEventListener("click", close);
 
   overlay.querySelectorAll<HTMLInputElement>("input[type=checkbox]").forEach((input) => {
+    const key = input.dataset.key as keyof AccessibilityPreference;
+    input.checked = pref[key];
     input.addEventListener("change", () => {
-      const key = input.dataset.key as keyof AccessibilityPreference;
       setAccessibilityPreference({ ...getAccessibilityPreference(), [key]: input.checked });
     });
   });

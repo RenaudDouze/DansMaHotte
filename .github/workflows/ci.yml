@@ -75,8 +75,26 @@ jobs:
           path: playwright-report/
           retention-days: 14
 
-  mutation-testing:
-    name: Mutation testing (logique pure)
+  mutation-testing-plan:
+    name: Mutation testing — plan
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+      # Un job par module, d'après les cibles de stryker.config.mjs.
+      - id: plan
+        run: node .github/scripts/mutation-matrix.mjs
+
+  mutation-testing-module:
+    name: Mutation testing — ${{ matrix.name }}
+    needs: mutation-testing-plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.mutation-testing-plan.outputs.matrix) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -93,7 +111,33 @@ jobs:
       # Babel 7 qu'utilise vite-plugin-pwa (workbox-build) à la racine —
       # voir mutation-testing/package.json.
       - run: npm ci --prefix mutation-testing
+      # Seuil bloquant à 100 % : un seul mutant survivant fait échouer le job.
       - run: npm run test:mutation
+        env:
+          MUTATE: ${{ matrix.mutate }}
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: mutation-report-${{ matrix.name }}
+          path: mutation-report/
+          retention-days: 14
+
+  # Un seul check stable « Mutation testing (logique pure) » pour la protection
+  # de branche, quel que soit le nombre de modules.
+  mutation-testing:
+    name: Mutation testing (logique pure)
+    needs: mutation-testing-module
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tous les modules à 100 %
+        env:
+          RESULT: ${{ needs.mutation-testing-module.result }}
+        run: |
+          if [ "$RESULT" != "success" ]; then
+            echo "::error::Mutation testing : au moins un module sous 100 % ($RESULT)."
+            exit 1
+          fi
 
   audit:
     name: Audit des dépendances

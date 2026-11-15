@@ -8,8 +8,9 @@ type ConnListener = (connected: boolean) => void;
 export class ListConnection {
   private ws: WebSocket | null = null;
   private reconnectDelay = 1000;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private closedByUser = false;
+  private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  // Posé par connect() avant toute lecture.
+  private closedByUser: boolean | undefined;
   private queue: ClientMessage[] = [];
   private stateListeners = new Set<StateListener>();
   private errorListeners = new Set<ErrorListener>();
@@ -56,12 +57,14 @@ export class ListConnection {
 
   disconnect(): void {
     this.closedByUser = true;
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    clearTimeout(this.reconnectTimer);
     this.ws?.close();
   }
 
+  // Appelée seulement une fois this.ws posé (à l'ouverture, ou par send()
+  // qui vérifie sa présence).
   private rawSend(msg: ClientMessage): void {
-    this.ws?.send(JSON.stringify(msg));
+    this.ws!.send(JSON.stringify(msg));
   }
 
   send(msg: ClientMessage): void {

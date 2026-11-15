@@ -4,14 +4,12 @@ const KEY = "dmh:theme";
 const NEXT: Record<ThemePreference, ThemePreference> = { system: "light", light: "dark", dark: "system" };
 const LABEL: Record<ThemePreference, string> = { system: "Auto", light: "Clair", dark: "Sombre" };
 
-function isThemePreference(value: unknown): value is ThemePreference {
-  return value === "system" || value === "light" || value === "dark";
-}
-
 export function getThemePreference(): ThemePreference {
   try {
     const stored = localStorage.getItem(KEY);
-    return isThemePreference(stored) ? stored : "system";
+    // "system" est le repli : toute autre valeur stockée (absente, invalide)
+    // y mène aussi, inutile de la tester explicitement.
+    return stored === "light" || stored === "dark" ? stored : "system";
   } catch {
     return "system";
   }

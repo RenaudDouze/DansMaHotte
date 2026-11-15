@@ -9,7 +9,9 @@ const BASE_PATH = import.meta.env.BASE_URL as string;
 
 /** Préfixe un chemin absolu de l'app (ex: "/l/ABCDEF") par le sous-chemin de déploiement. */
 export function appPath(path: string): string {
-  return path === "/" ? BASE_PATH : BASE_PATH.slice(0, -1) + path;
+  // BASE_PATH finit toujours par "/" : le retirer puis ajouter `path` (qui
+  // commence par "/") redonne BASE_PATH pour "/", sans cas particulier.
+  return BASE_PATH.slice(0, -1) + path;
 }
 
 /** L'équivalent de location.pathname, débarrassé du sous-chemin de déploiement. */
