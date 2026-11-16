@@ -7,10 +7,20 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+    commit-message:
+      prefix: build
+      prefix-development: chore
+      include: scope
     open-pull-requests-limit: 10
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+      include: scope
     open-pull-requests-limit: 10
