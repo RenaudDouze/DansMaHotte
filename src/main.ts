@@ -6,6 +6,9 @@ import { applyAccessibilityPreference, getAccessibilityPreference } from "./lib/
 import { appPath, routePath } from "./lib/basePath";
 import { decodeCompactShare } from "./lib/compactShare";
 import { setPendingImport } from "./lib/pendingImport";
+import { initUpdatePrompt } from "./lib/updatePrompt";
+import { showUpdateBanner, watchOffline } from "./components/pwaBanner";
+import { registerSW } from "virtual:pwa-register";
 
 // Appliqué avant le premier rendu pour éviter un flash de thème clair suivi
 // d'un bascule sombre si l'utilisateur a choisi un thème manuel.
@@ -53,3 +56,6 @@ function render(): void {
 
 window.addEventListener("popstate", render);
 render();
+
+watchOffline();
+initUpdatePrompt({ register: registerSW, showBanner: showUpdateBanner });

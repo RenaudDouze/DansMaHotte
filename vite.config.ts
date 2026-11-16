@@ -20,7 +20,7 @@ export default defineConfig({
     // that folder, never those two stray files, and neither ends up bundled
     // inside index.js itself (verified after every dependency bump).
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
       // Sert le manifest/service worker uniquement pour le build du client :
       // le plugin Cloudflare gère un environment "worker" séparé que VitePWA
       // ne doit pas toucher.
