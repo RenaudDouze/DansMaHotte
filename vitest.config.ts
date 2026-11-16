@@ -6,6 +6,8 @@ export default defineConfig({
     alias: {
       // See worker/test/cloudflareWorkersShim.ts.
       "cloudflare:workers": path.resolve(import.meta.dirname, "worker/test/cloudflareWorkersShim.ts"),
+      // See src/test/pwaRegisterShim.ts.
+      "virtual:pwa-register": path.resolve(import.meta.dirname, "src/test/pwaRegisterShim.ts"),
     },
   },
   test: {
@@ -21,6 +23,7 @@ export default defineConfig({
       exclude: [
         "**/*.test.ts",
         "worker/test/**",
+        "src/test/**",
         // Type-only file (interfaces + one trivial re-exported constant),
         // nothing meaningful to unit-test.
         "shared/types.ts",

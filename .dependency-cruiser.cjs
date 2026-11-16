@@ -16,8 +16,8 @@ module.exports = {
       name: "no-orphans",
       comment: "Un fichier que rien n'importe est du code mort : le supprimer (COV-05).",
       severity: "error",
-      // Exception : worker/test/ contient le shim de « cloudflare:workers », importé seulement par l'alias de vitest.config.ts.
-      from: { orphan: true, pathNot: ["\\.d\\.ts$", "(^|/)\\.[^/]+\\.(js|cjs|mjs|ts)$", "\\.config\\.(js|cjs|mjs|ts)$", "^src/main\\.tsx?$", "^worker/index\\.ts$", "^worker/test/"] },
+      // Exception : worker/test/ contient le shim de « cloudflare:workers », importé seulement par l'alias de vitest.config.ts ; src/test/ idem pour « virtual:pwa-register ».
+      from: { orphan: true, pathNot: ["\\.d\\.ts$", "(^|/)\\.[^/]+\\.(js|cjs|mjs|ts)$", "\\.config\\.(js|cjs|mjs|ts)$", "^src/main\\.tsx?$", "^worker/index\\.ts$", "^worker/test/", "^src/test/"] },
       to: {},
     },
     {

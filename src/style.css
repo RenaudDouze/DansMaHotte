@@ -1282,3 +1282,31 @@ button:focus-visible {
   animation-duration: 0.001ms !important;
   animation-iteration-count: 1 !important;
 }
+
+/* Bandeaux PWA : nouvelle version disponible, hors ligne */
+.pwa-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 50;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+}
+.pwa-banner[hidden] {
+  display: none;
+}
+.pwa-banner span {
+  flex: 1 1 200px;
+}
+#offline-banner {
+  bottom: 64px;
+}
