@@ -110,3 +110,9 @@ When adding client-side behavior, add a unit test next to the file (and extend a
 ## Privacy model
 
 A list's only access control is its 6-character code — no accounts, no passwords. Anyone with the code can view and edit it (surfaced to users via `src/lib/privacyHint.ts`'s reminder text, shown in several places in the UI). List data is encrypted at rest server-side; item photos in R2 are not. Don't weaken or bypass this reminder, and don't add code-adjacent "security" that implies stronger guarantees than this model actually provides. "Hidden recipients" (`hiddenRecipientsPreference.ts`) is one such cosmetic-only feature: it hides a person's section from *this device's* screen (e.g. before handing your phone to that very person) but is a display preference, not access control — the data is still fully synced to and visible from any other device with the code.
+
+## Documentation, versioning and architecture rules
+
+- `doc/` holds the stable truth for humans and agents: `architecture.md` (executable dependency rules), `codage.md` (conventions), `improvement.md` (backlog).
+- `npm run lint` also runs dependency-cruiser (`.dependency-cruiser.cjs`): no cycles, no orphan files, one-way layer dependencies. Document an exception next to the rule, never loosen it globally.
+- Commits follow Conventional Commits (`type(scope): subject`); enable the hook with `git config core.hooksPath .githooks`. The version is derived from the commits by semantic-release (`release.yml`): never edit a version number or a changelog by hand.
