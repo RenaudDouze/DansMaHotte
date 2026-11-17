@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  actions: read # attendre la release du commit (VER-09)
   pages: write
   id-token: write
 
@@ -30,6 +31,13 @@ jobs:
         with:
           fetch-depth: 0 # tags complets : version affichée (VER-09)
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      # Le tag de release est créé par release.yml, en parallèle de la CI : on attend
+      # sa fin et on récupère les tags avant de construire (VER-09).
+      - name: Attendre la release du commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: sh .github/scripts/wait-release.sh "${{ github.event.workflow_run.head_sha || github.sha }}"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
