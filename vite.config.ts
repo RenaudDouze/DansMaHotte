@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { VitePWA } from "vite-plugin-pwa";
+import { appVersion } from "./.github/scripts/app-version.mjs";
 
 // "/" sur Cloudflare Workers (servi à la racine du domaine) ; sous-chemin du
 // dépôt (ex: "/dansmahotte/") sur GitHub Pages, où l'app est servie depuis un
@@ -10,6 +11,8 @@ const base = process.env.VITE_BASE_PATH || "/";
 
 export default defineConfig({
   base,
+  // Dernier tag v* (VER-09) : le checkout de CI doit avoir l'historique (fetch-depth: 0).
+  define: { __APP_VERSION__: JSON.stringify(appVersion()) },
   plugins: [
     cloudflare(),
     // VitePWA isn't aware of @cloudflare/vite-plugin's separate worker

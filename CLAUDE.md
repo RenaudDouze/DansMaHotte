@@ -117,6 +117,7 @@ A list's only access control is its 6-character code — no accounts, no passwor
 - `npm run lint` also runs dependency-cruiser (`.dependency-cruiser.cjs`): no cycles, no orphan files, one-way layer dependencies. Document an exception next to the rule, never loosen it globally.
 - Commits follow Conventional Commits (`type(scope): subject`); enable the hook with `git config core.hooksPath .githooks`. The version is derived from the commits by semantic-release (`release.yml`): never edit a version number or a changelog by hand.
 - Audit (CI-13) : le niveau `high` complet passe par `.github/scripts/audit-check.mjs` ; un avis sans correctif se déclare dans `.github/audit-exceptions.json` (raison + expiration, 30 jours au plus), jamais en baissant le seuil.
+- Version affichée (VER-09) : dernier tag `v*`, lu à la construction par `.github/scripts/app-version.mjs` (identique dans tous les dépôts, ne pas le modifier ici) ; `src/lib/appVersion.ts` (constante `__APP_VERSION__` définie dans `vite.config.ts`), affichée au pied de l'accueil (`src/views/home.ts`). Les workflows de build (`pages.yml`, `deploy.yml`) font un checkout en `fetch-depth: 0`, sans quoi la page affiche `dev`. Les tests figent la valeur : jamais de dépendance aux tags git.
 
 ## PWA: updates and offline
 

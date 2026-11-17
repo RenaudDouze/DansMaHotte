@@ -56,6 +56,11 @@ describe("mountHomeView", () => {
     vi.unstubAllGlobals();
   });
 
+  it("affiche la version du projet en pied d'accueil (VER-09)", () => {
+    mountHomeView(root, navigate);
+    expect(root.querySelector(".app-version")?.textContent).toBe("Version 9.9.9-test");
+  });
+
   it("affiche l'accueil sans section « Listes récentes » quand il n'y en a pas", () => {
     mountHomeView(root, navigate);
 

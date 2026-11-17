@@ -2,6 +2,8 @@ import { defineConfig } from "vitest/config";
 import path from "node:path";
 
 export default defineConfig({
+  // Valeur fixe : les tests ne dépendent pas des tags git (VER-09).
+  define: { __APP_VERSION__: JSON.stringify("9.9.9-test") },
   resolve: {
     alias: {
       // See worker/test/cloudflareWorkersShim.ts.
