@@ -1246,7 +1246,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         <header class="list-header">
           <button class="icon-btn" id="btn-home" aria-label="Accueil">${icons.back}</button>
           <h1 class="list-title" id="list-title">${escapeHtml(s.name)}</h1>
-          <span class="lock-badge" title="Données chiffrées sur le serveur" aria-label="Données chiffrées sur le serveur">${icons.lock}</span>
+          <span class="lock-badge" role="img" title="Données chiffrées sur le serveur" aria-label="Données chiffrées sur le serveur">${icons.lock}</span>
           <span class="conn-dot ${isConnected ? "online" : ""}" id="conn-dot" title="${isConnected ? "Synchronisé" : "Connexion…"}"></span>
           <button class="icon-btn" id="btn-search" aria-label="Rechercher">${icons.search}</button>
           ${hideCheckedButtonHtml(getHideCheckedPreference())}
