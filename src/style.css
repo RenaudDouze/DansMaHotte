@@ -2,10 +2,10 @@
   --bg: #f4f6f3;
   --surface: #ffffff;
   --text: #1a2420;
-  --text-muted: #66756d;
+  --text-muted: #56655d;
   --border: #e1e6e1;
-  --primary: #1f8a53;
-  --primary-dark: #166a3f;
+  --primary: #1a7a49;
+  --primary-dark: #136038;
   --primary-contrast: #ffffff;
   --danger: #c4453a;
   --favorite: #d99a00;
@@ -639,7 +639,9 @@ button:focus-visible {
 .item-status {
   flex-shrink: 0;
   border: 1px solid var(--status-color);
-  color: var(--status-color);
+  /* Le texte est foncé (clair) ou éclairci (sombre) vers --text : la couleur de statut seule
+     n'atteint pas 4,5:1 sur toutes les teintes (A11Y-05). La bordure garde la teinte pure. */
+  color: color-mix(in srgb, var(--status-color) 60%, var(--text));
   background: var(--surface);
   border-radius: 999px;
   padding: 0.25em 0.6em;
@@ -1317,5 +1319,4 @@ button:focus-visible {
   text-align: center;
   font-size: 0.75rem;
   color: var(--text-muted, inherit);
-  opacity: 0.7;
 }
