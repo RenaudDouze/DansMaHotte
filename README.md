@@ -122,6 +122,25 @@ Pages activé une première fois dans Settings → Pages (Source: "GitHub
 Actions") ; `VITE_SYNC_WORKER_URL` absente (déploiement Cloudflare seul) =
 chemins `/api/...` relatifs, comportement inchangé.
 
+### Domaine personnalisé (`dansmahotte.douzeensemble.app`)
+
+Le domaine est servi par GitHub Pages : `public/CNAME` le déclare et
+`pages.yml` construit avec `VITE_BASE_PATH=/` (app à la racine du domaine, pas
+sous `/DansMaHotte/`). La zone DNS peut rester chez n'importe quel fournisseur :
+elle n'a pas à être déplacée chez Cloudflare. Le Worker garde son URL
+`workers.dev` (`DEPLOY_URL`, à ne pas changer) et ne sert que d'API.
+
+Mise en place, une seule fois :
+
+1. Chez le fournisseur DNS, créer un enregistrement `CNAME` : nom
+   `dansmahotte`, valeur `renauddouze.github.io`.
+2. Settings → Pages → Custom domain : saisir `dansmahotte.douzeensemble.app`.
+3. Une fois le certificat émis (quelques minutes), cocher **Enforce HTTPS**.
+
+Pour un autre sous-domaine : modifier `public/CNAME`, puis refaire les étapes
+1 à 3 avec le nouveau nom. Les PWA installées sur l'ancienne origine doivent
+être réinstallées.
+
 ## Structure du projet
 
 ```
