@@ -52,10 +52,9 @@ jobs:
           # trouver l'API et le WebSocket. Valeur de repli : l'URL
           # *.workers.dev par défaut du Worker actuellement déployé.
           VITE_SYNC_WORKER_URL: ${{ vars.DEPLOY_URL || 'https://dansmahotte.douzem.workers.dev' }}
-          # Un dépôt de projet (pas <user>.github.io) est servi sous
-          # /<nom-du-dépôt>/ plutôt qu'à la racine du domaine : voir `base`
-          # dans vite.config.ts et src/lib/basePath.ts.
-          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+          # Domaine personnalisé (public/CNAME) : l'app est servie à la
+          # racine du domaine, pas sous /<nom-du-dépôt>/.
+          VITE_BASE_PATH: /
         run: npm run build
       - name: Fallback SPA (routes /l/CODE rechargées ou ouvertes directement)
         # GitHub Pages n'a pas d'équivalent au `not_found_handling:
