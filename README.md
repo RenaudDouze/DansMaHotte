@@ -133,7 +133,7 @@ elle n'a pas à être déplacée chez Cloudflare. Le Worker garde son URL
 Mise en place, une seule fois :
 
 1. Chez le fournisseur DNS, créer un enregistrement `CNAME` : nom
-   `dansmahotte`, valeur `renauddouze.github.io`.
+   `dansmahotte`, valeur `douzeensemble.github.io`.
 2. Settings → Pages → Custom domain : saisir `dansmahotte.douzeensemble.app`.
 3. Une fois le certificat émis (quelques minutes), cocher **Enforce HTTPS**.
 
